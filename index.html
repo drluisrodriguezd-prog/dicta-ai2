@@ -1434,12 +1434,20 @@ REGLAS ESTRICTAS:
   }
   try {
     const parsed = JSON.parse(result);
+    if (!parsed || !parsed.versiones) throw new Error("JSON no contiene 'versiones'");
     mostrarVersiones(parsed, seccion);
     if (parsed.alertas && parsed.alertas.length) {
       const aiSug = document.getElementById('ai-sugerencias');
       aiSug.innerHTML = parsed.alertas.map(a => '<div class="badge badge-yellow" style="margin:2px">⚠ ' + a + '</div>').join('');
     }
-  } catch(e) { showToast('Error al procesar respuesta de IA','error'); }
+  } catch(e) {
+    console.error('Error parseando JSON:', e, result);
+    mostrarVersiones({ versiones: [
+      { id:1, etiqueta:'Error de Formato IA', texto:'❌ La IA respondió con un formato ilegible.\n\nRespuesta cruda de la IA:\n' + String(result).substring(0,250) + '...' },
+      { id:2, etiqueta:'Inténtalo de Nuevo', texto:'A veces la IA se confunde de formato. Clic en GRABAR e intenta otra vez con un relato más corto.' },
+      { id:3, etiqueta:'Cambia Proveedor', texto:'Si sigue pasando, ve a 🔑 Configurar IA y cambia a Groq o OpenAI.' }
+    ]}, seccion);
+  }
 }
 
 function mostrarVersiones(data, seccion) {
