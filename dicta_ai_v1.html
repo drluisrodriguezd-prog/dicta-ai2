@@ -1333,11 +1333,11 @@ function cambiarHablante(modo) {
 
 // ===== IA API (Multi-Provider) =====
 function cleanJsonResponse(text) {
-  var cleaned = text.trim();
-  if (cleaned.startsWith('```json')) cleaned = cleaned.replace(/^```json/, '');
-  else if (cleaned.startsWith('```')) cleaned = cleaned.replace(/^```/, '');
-  if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
-  return cleaned.trim();
+  try {
+    var match = text.match(/\{[\s\S]*\}/);
+    if (match) return match[0];
+    return text;
+  } catch(e) { return text; }
 }
 
 async function callIA(systemPrompt, userMessage, maxRetries) {
@@ -1356,7 +1356,7 @@ async function callIA(systemPrompt, userMessage, maxRetries) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: systemPrompt }] },
             contents: [{ parts: [{ text: userMessage }] }],
-            generationConfig: { maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 1024 } }
+            generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 1024 } }
           })
         });
         if (res.status === 429) { await handleRateLimit(attempt, maxRetries); attempt++; continue; }
