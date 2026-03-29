@@ -1,0 +1,2100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dicta AI — Expediente Clínico Inteligente</title>
+<meta name="description" content="Dicta AI v1.0 - Sistema de expediente clínico inteligente con asistencia de IA para médicos latinoamericanos">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+:root{
+--bg-base:#0a0c0f;--bg-surface:#111318;--bg-card:#161a21;--bg-elevated:#1c2029;
+--border-subtle:#232830;--border-active:#2e3540;
+--accent-primary:#00d4aa;--accent-hover:#00f0c0;--accent-danger:#ff4d6d;
+--accent-warn:#ffb347;--accent-info:#4da6ff;
+--text-primary:#e8eaf0;--text-secondary:#8892a0;--text-muted:#4a5260;
+--glow-primary:rgba(0,212,170,0.15);--glow-danger:rgba(255,77,109,0.15);
+--radius:10px;--radius-lg:16px;--transition:all .2s ease;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px;scroll-behavior:smooth}
+body{font-family:'DM Sans',sans-serif;background:var(--bg-base);color:var(--text-primary);min-height:100vh;overflow:hidden}
+h1,h2,h3{font-family:'Playfair Display',serif;font-weight:600;color:var(--text-primary)}
+code,.mono{font-family:'JetBrains Mono',monospace}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg-surface)}
+::-webkit-scrollbar-thumb{background:var(--border-active);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--accent-primary)}
+
+/* ===== BUTTONS ===== */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:none;border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;transition:var(--transition);position:relative;
+box-shadow:0 2px 4px rgba(0,0,0,.3),0 4px 8px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.05)}
+.btn:active{transform:translateY(1px);box-shadow:0 1px 2px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.03)}
+.btn-primary{background:var(--accent-primary);color:#0a0c0f}
+.btn-primary:hover{background:var(--accent-hover);box-shadow:0 2px 4px rgba(0,0,0,.3),0 4px 12px rgba(0,212,170,.3),inset 0 1px 0 rgba(255,255,255,.1)}
+.btn-danger{background:var(--accent-danger);color:#fff}
+.btn-danger:hover{box-shadow:0 2px 4px rgba(0,0,0,.3),0 4px 12px rgba(255,77,109,.3)}
+.btn-ghost{background:transparent;color:var(--text-secondary);border:1px solid var(--border-subtle)}
+.btn-ghost:hover{color:var(--text-primary);border-color:var(--border-active);background:var(--bg-elevated)}
+.btn-warn{background:var(--accent-warn);color:#0a0c0f}
+.btn-info{background:var(--accent-info);color:#fff}
+.btn-sm{padding:5px 10px;font-size:.8rem}
+.btn-lg{padding:12px 24px;font-size:1rem}
+.btn-icon{padding:8px;min-width:36px;justify-content:center}
+
+/* ===== INPUTS ===== */
+.input,.select,.textarea{background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--radius);color:var(--text-primary);font-family:'DM Sans',sans-serif;font-size:.875rem;padding:10px 12px;width:100%;transition:var(--transition);outline:none}
+.input:focus,.select:focus,.textarea:focus{border-color:var(--accent-primary);box-shadow:0 0 0 3px var(--glow-primary)}
+.textarea{resize:vertical;min-height:80px}
+.select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238892a0' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+label{display:block;font-size:.8rem;font-weight:500;color:var(--text-secondary);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+
+/* ===== CARDS ===== */
+.card{background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);padding:20px;backdrop-filter:blur(12px);transition:var(--transition);animation:fadeInUp .3s ease}
+.card:hover{border-color:var(--border-active)}
+.card-title{font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card-title .icon{color:var(--accent-primary)}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* ===== LAYOUT ===== */
+#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg-base);position:fixed;inset:0;z-index:1000}
+#app-container{display:none;height:100vh;grid-template-rows:auto 1fr;grid-template-columns:220px 1fr 280px}
+.topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:48px;background:var(--bg-surface);border-bottom:1px solid var(--border-subtle);z-index:100}
+.topbar .logo{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--accent-primary);display:flex;align-items:center;gap:8px}
+.topbar .disclaimer{font-size:.7rem;color:var(--accent-warn);max-width:500px;text-align:center;opacity:.8}
+.topbar .user-info{display:flex;align-items:center;gap:12px;font-size:.85rem}
+.sidebar{background:var(--bg-surface);border-right:1px solid var(--border-subtle);padding:16px 0;overflow-y:auto;display:flex;flex-direction:column}
+.sidebar-section{padding:12px 16px}
+.sidebar-section-title{font-size:.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:8px;font-weight:600}
+.sidebar-item{display:flex;align-items:center;gap:10px;padding:9px 16px;color:var(--text-secondary);cursor:pointer;transition:var(--transition);border-radius:0;font-size:.875rem;border-left:3px solid transparent}
+.sidebar-item:hover{background:var(--bg-elevated);color:var(--text-primary)}
+.sidebar-item.active{color:var(--accent-primary);border-left-color:var(--accent-primary);background:rgba(0,212,170,.05)}
+.sidebar-patient{padding:12px 16px;border-bottom:1px solid var(--border-subtle)}
+.sidebar-patient .name{font-weight:600;color:var(--text-primary);font-size:.9rem}
+.sidebar-patient .episode{font-size:.75rem;color:var(--accent-primary);font-family:'JetBrains Mono',monospace}
+.main-content{overflow-y:auto;padding:20px;background:var(--bg-base)}
+.ai-panel{background:var(--bg-surface);border-left:1px solid var(--border-subtle);padding:16px;overflow-y:auto}
+.ai-panel-title{font-size:.85rem;text-transform:uppercase;letter-spacing:1px;color:var(--accent-primary);margin-bottom:12px;font-weight:600}
+
+/* ===== DASHBOARD VIEWS ===== */
+.dashboard{display:none}
+.dashboard.active{display:block}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.form-row{display:flex;gap:12px;margin-bottom:12px}
+.form-row>*{flex:1}
+.form-group{margin-bottom:14px}
+
+/* ===== RECORDING BAR ===== */
+.recording-bar{display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--bg-elevated);border-radius:var(--radius);margin-bottom:16px;flex-wrap:wrap}
+@keyframes pulse-record{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.2)}}
+.rec-indicator{width:10px;height:10px;border-radius:50%;background:var(--accent-danger);animation:pulse-record 1.2s infinite;display:none}
+.rec-indicator.active{display:inline-block}
+.speaker-toggle{display:flex;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border-subtle)}
+.speaker-btn{padding:8px 16px;cursor:pointer;font-size:.85rem;font-weight:600;border:none;transition:var(--transition)}
+.speaker-btn.paciente{background:var(--accent-primary);color:#0a0c0f}
+.speaker-btn.paciente.inactive{background:var(--bg-card);color:var(--text-muted)}
+.speaker-btn.medico{background:var(--accent-info);color:#fff}
+.speaker-btn.medico.inactive{background:var(--bg-card);color:var(--text-muted)}
+
+/* ===== WAVEFORM VISUALIZER ===== */
+.waveform-container{width:100%;margin-top:8px;display:none;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:var(--radius);overflow:hidden;position:relative}
+.waveform-container.active{display:block}
+.waveform-container canvas{display:block;width:100%;height:64px}
+.waveform-label{position:absolute;top:4px;left:8px;font-size:.65rem;color:var(--accent-danger);text-transform:uppercase;letter-spacing:1px;font-weight:600;opacity:.8}
+.waveform-container.paused canvas{opacity:.4}
+.waveform-container.paused .waveform-label{color:var(--text-muted)}
+
+/* ===== BADGES ===== */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:.7rem;font-weight:600}
+.badge-green{background:rgba(0,212,170,.15);color:var(--accent-primary)}
+.badge-blue{background:rgba(77,166,255,.15);color:var(--accent-info)}
+.badge-yellow{background:rgba(255,179,71,.15);color:var(--accent-warn)}
+.badge-red{background:rgba(255,77,109,.15);color:var(--accent-danger)}
+.badge-purple{background:rgba(168,85,247,.15);color:#a855f7}
+.badge-white{background:rgba(255,255,255,.1);color:var(--text-primary)}
+
+/* ===== TOAST ===== */
+.toast-container{position:fixed;top:60px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{padding:12px 20px;border-radius:var(--radius);font-size:.85rem;animation:fadeInUp .3s ease;max-width:380px;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.toast-success{background:#0d3d2e;border:1px solid var(--accent-primary);color:var(--accent-primary)}
+.toast-error{background:#3d0d1a;border:1px solid var(--accent-danger);color:var(--accent-danger)}
+.toast-warning{background:#3d2e0d;border:1px solid var(--accent-warn);color:var(--accent-warn)}
+.toast-info{background:#0d1e3d;border:1px solid var(--accent-info);color:var(--accent-info)}
+
+/* ===== MODAL ===== */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:5000;display:none;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);padding:28px;max-width:500px;width:90%;animation:fadeInUp .3s ease;max-height:90vh;overflow-y:auto}
+.modal h2{margin-bottom:16px;font-size:1.3rem}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+
+/* ===== AUTOCOMPLETE ===== */
+.autocomplete-wrap{position:relative}
+.autocomplete-list{position:absolute;top:100%;left:0;right:0;background:var(--bg-elevated);border:1px solid var(--border-active);border-radius:0 0 var(--radius) var(--radius);max-height:240px;overflow-y:auto;z-index:200;display:none}
+.autocomplete-list.show{display:block}
+.autocomplete-item{padding:8px 12px;cursor:pointer;font-size:.85rem;border-bottom:1px solid var(--border-subtle);transition:var(--transition)}
+.autocomplete-item:hover,.autocomplete-item.selected{background:var(--bg-card);color:var(--accent-primary)}
+.autocomplete-item .code{font-family:'JetBrains Mono',monospace;color:var(--accent-info);font-size:.75rem;margin-right:6px}
+
+/* ===== VERSION CARDS ===== */
+.version-cards{display:grid;gap:10px;margin:12px 0}
+.version-card{background:var(--bg-surface);border:2px solid var(--border-subtle);border-radius:var(--radius);padding:12px;cursor:pointer;transition:var(--transition)}
+.version-card:hover{border-color:var(--border-active)}
+.version-card.selected{border-color:var(--accent-primary);box-shadow:0 0 0 3px var(--glow-primary)}
+.version-card .v-label{font-size:.75rem;font-weight:600;color:var(--accent-primary);margin-bottom:4px}
+
+/* ===== DIAGNOSIS TAGS ===== */
+.dx-list{display:flex;flex-direction:column;gap:8px}
+.dx-item{display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg-surface);border-radius:var(--radius);border:1px solid var(--border-subtle)}
+.dx-item .dx-code{font-family:'JetBrains Mono',monospace;color:var(--accent-info);font-size:.85rem;min-width:60px}
+.dx-item .dx-name{flex:1;font-size:.9rem}
+.dx-item .dx-type{font-size:.75rem;padding:2px 8px;border-radius:12px}
+.dx-type-principal{background:rgba(0,212,170,.15);color:var(--accent-primary)}
+.dx-type-diferencial{background:rgba(255,179,71,.15);color:var(--accent-warn)}
+.dx-type-descartado{background:rgba(255,255,255,.08);color:var(--text-muted)}
+
+/* ===== MEDICATION ITEM ===== */
+.med-item{background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--radius);padding:14px;margin-bottom:10px}
+.med-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.med-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+
+/* ===== ALLERGY ALERT ===== */
+.alert-banner{padding:10px 16px;border-radius:var(--radius);font-size:.85rem;display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.alert-banner-warn{background:rgba(255,179,71,.1);border:1px solid var(--accent-warn);color:var(--accent-warn)}
+.alert-banner-danger{background:rgba(255,77,109,.1);border:1px solid var(--accent-danger);color:var(--accent-danger)}
+
+/* ===== SPINNER ===== */
+.spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--border-subtle);border-top-color:var(--accent-primary);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-overlay{position:absolute;inset:0;background:rgba(10,12,15,.7);display:flex;align-items:center;justify-content:center;gap:10px;border-radius:var(--radius-lg);z-index:10;font-size:.85rem;color:var(--text-secondary)}
+
+/* ===== LOGIN ===== */
+.login-card{background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);padding:40px;width:400px;text-align:center;backdrop-filter:blur(12px)}
+.login-card h1{font-size:2rem;color:var(--accent-primary);margin-bottom:4px}
+.login-card .subtitle{color:var(--text-secondary);font-size:.85rem;margin-bottom:28px}
+.login-card .form-group{text-align:left}
+.login-card .divider{margin:20px 0;color:var(--text-muted);font-size:.8rem}
+.login-decorative{position:absolute;opacity:.06;pointer-events:none}
+
+/* ===== EXPANDABLE SECTIONS ===== */
+.expandable{margin-bottom:12px}
+.expandable-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--bg-elevated);border-radius:var(--radius);cursor:pointer;transition:var(--transition)}
+.expandable-header:hover{background:var(--bg-card)}
+.expandable-body{padding:16px;display:none}
+.expandable.open .expandable-body{display:block}
+.expandable.open .expandable-header{border-radius:var(--radius) var(--radius) 0 0;border-bottom:1px solid var(--border-subtle)}
+
+/* ===== TRANSCRIPTION AREA ===== */
+.transcription-area{background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:var(--radius);padding:14px;min-height:100px;font-size:.9rem;line-height:1.6;white-space:pre-wrap}
+.transcription-area.recording{border-color:var(--accent-danger);box-shadow:0 0 0 3px var(--glow-danger)}
+
+/* ===== PRINT STYLES ===== */
+@media print{
+body{background:#fff!important;color:#000!important;font-size:11pt}
+#app-container{display:block!important}
+.topbar,.sidebar,.ai-panel,.btn,.recording-bar,.toast-container,.modal-overlay{display:none!important}
+.main-content{padding:0;overflow:visible}
+.dashboard{display:none!important}
+#print-area{display:block!important}
+.card{background:#fff;border:1px solid #ccc;box-shadow:none;backdrop-filter:none}
+.print-header{text-align:center;border-bottom:2px solid #000;padding-bottom:12px;margin-bottom:20px}
+.print-footer{text-align:center;border-top:1px solid #999;padding-top:10px;margin-top:30px;font-size:9pt;color:#666}
+}
+#print-area{display:none}
+
+/* ===== IKIGAI DECORATIVE ELEMENTS ===== */
+.ikigai-branch{position:absolute;opacity:.04;pointer-events:none}
+.section-divider{height:1px;background:linear-gradient(90deg,transparent,var(--border-subtle),transparent);margin:20px 0}
+
+/* ===== MOBILE HAMBURGER & AI TOGGLE ===== */
+.mobile-hamburger,.mobile-ai-toggle{display:none;background:none;border:none;color:var(--text-primary);font-size:1.4rem;cursor:pointer;padding:6px;line-height:1}
+.sidebar-close{display:none;position:absolute;top:10px;right:10px;background:none;border:none;color:var(--text-secondary);font-size:1.3rem;cursor:pointer}
+.sidebar-overlay,.ai-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:199}
+.sidebar-overlay.show,.ai-overlay.show{display:block}
+
+/* ===== RESPONSIVE: TABLET (≤1100px) ===== */
+@media(max-width:1100px){
+  #app-container{grid-template-columns:200px 1fr 240px}
+  .ai-panel{width:240px;padding:12px}
+  .grid-2{grid-template-columns:1fr 1fr}
+  .grid-3{grid-template-columns:1fr 1fr}
+  .med-grid{grid-template-columns:1fr 1fr}
+}
+
+/* ===== RESPONSIVE: SMALL TABLET (≤900px) ===== */
+@media(max-width:900px){
+  .mobile-hamburger,.mobile-ai-toggle{display:inline-flex}
+  .sidebar-close{display:block}
+  #app-container{grid-template-columns:1fr!important}
+  .sidebar{position:fixed;left:-260px;top:0;bottom:0;width:250px;z-index:200;transition:left .3s ease;box-shadow:4px 0 20px rgba(0,0,0,.5)}
+  .sidebar.open{left:0}
+  .ai-panel{position:fixed;right:-300px;top:48px;bottom:0;width:280px;z-index:200;transition:right .3s ease;box-shadow:-4px 0 20px rgba(0,0,0,.5)}
+  .ai-panel.open{right:0}
+  .topbar{padding:0 12px;overflow:hidden}
+  .topbar .disclaimer{display:none}
+  .topbar .user-info{gap:6px;font-size:.8rem;min-width:0}
+  .topbar .user-info #topbar-medico{max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .topbar .user-info #save-indicator{display:none}
+  .topbar .user-info .btn{padding:4px 8px;font-size:.75rem}
+  .grid-2{grid-template-columns:1fr}
+  .grid-3{grid-template-columns:1fr}
+  .form-row{flex-direction:column}
+  .med-grid{grid-template-columns:1fr}
+  .recording-bar{flex-direction:column;align-items:stretch}
+  .speaker-toggle{justify-content:center}
+}
+
+/* ===== RESPONSIVE: PHONE (≤600px) ===== */
+@media(max-width:600px){
+  html{font-size:13px}
+  .main-content{padding:12px}
+  .card{padding:14px}
+  .btn-lg{padding:10px 18px;font-size:.9rem}
+  .login-card{width:95%;padding:24px}
+  .login-card h1{font-size:1.5rem}
+  .modal{padding:20px;width:95%}
+  .topbar .logo{font-size:1rem;gap:4px}
+  .topbar .logo span{display:none}
+  .topbar .user-info #topbar-medico{max-width:60px}
+  h2{font-size:1.1rem}
+  .version-card{padding:10px}
+  .dx-item{flex-wrap:wrap;gap:6px}
+  .med-item{padding:10px}
+  .topbar .user-info .btn{padding:3px 6px;font-size:.7rem}
+}
+</style>
+</head>
+<body>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ===== LOGIN SCREEN ===== -->
+<div id="login-screen">
+<svg class="login-decorative" style="top:10%;left:5%;width:120px" viewBox="0 0 100 150" fill="none" stroke="currentColor" stroke-width=".8" color="#00d4aa"><path d="M50 140 C50 140 50 80 50 60 C50 40 30 30 30 50 M50 100 C50 100 70 85 75 70 M50 80 C50 80 25 65 20 50 M50 60 C50 60 65 50 70 35"/></svg>
+<svg class="login-decorative" style="bottom:10%;right:5%;width:100px" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width=".8" color="#00d4aa"><circle cx="50" cy="50" r="30"/><circle cx="50" cy="50" r="20"/><circle cx="50" cy="50" r="10"/><line x1="50" y1="10" x2="50" y2="0"/><line x1="50" y1="90" x2="50" y2="100"/></svg>
+<div class="login-card">
+<h1>⚕ Dicta AI</h1>
+<p class="subtitle">Expediente Clínico Inteligente v1.0</p>
+<div id="login-form">
+<div class="form-group"><label>Correo electrónico</label><input class="input" type="email" id="login-email" placeholder="doctor@ejemplo.com"></div>
+<div class="form-group"><label>Contraseña</label><div style="position:relative"><input class="input" type="password" id="login-password" placeholder="••••••••"><button type="button" class="btn-icon" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer" onclick="togglePasswordVisibility('login-password',this)">👁</button></div></div>
+<button class="btn btn-primary btn-lg" style="width:100%;margin-top:12px" onclick="handleLogin()">Iniciar Sesión</button>
+<p class="divider">— o —</p>
+<button class="btn btn-ghost" style="width:100%" onclick="showRegisterModal()">Crear cuenta nueva</button>
+</div>
+</div>
+</div>
+
+<!-- ===== REGISTER MODAL ===== -->
+<div class="modal-overlay" id="register-modal">
+<div class="modal">
+<h2>Crear Cuenta</h2>
+<div class="form-group"><label>Nombre completo</label><input class="input" id="reg-nombre" placeholder="Dr. Juan Pérez"></div>
+<div class="form-group"><label>Especialidad</label><input class="input" id="reg-especialidad" placeholder="Medicina General"></div>
+<div class="form-group"><label>Matrícula</label><input class="input" id="reg-matricula" placeholder="MP-12345"></div>
+<div class="form-group"><label>Correo electrónico</label><input class="input" type="email" id="reg-email" placeholder="doctor@ejemplo.com"></div>
+<div class="form-group"><label>Contraseña</label><input class="input" type="password" id="reg-password" placeholder="Mínimo 6 caracteres"></div>
+<div class="modal-actions">
+<button class="btn btn-ghost" onclick="closeModal('register-modal')">Cancelar</button>
+<button class="btn btn-primary" onclick="handleRegister()">Registrarse</button>
+</div>
+</div>
+</div>
+
+<!-- ===== CONFIRM MODAL ===== -->
+<div class="modal-overlay" id="confirm-modal">
+<div class="modal">
+<h2 id="confirm-title">Confirmar</h2>
+<p id="confirm-message" style="color:var(--text-secondary);margin-bottom:16px"></p>
+<div class="modal-actions">
+<button class="btn btn-ghost" onclick="closeModal('confirm-modal')">Cancelar</button>
+<button class="btn btn-primary" id="confirm-ok-btn" onclick="">Confirmar</button>
+</div>
+</div>
+</div>
+
+<!-- ===== MAIN APP ===== -->
+<div id="app-container" style="display:none">
+
+<!-- TOPBAR -->
+<div class="topbar">
+<button class="mobile-hamburger" onclick="toggleSidebar()" aria-label="Menú">☰</button>
+<div class="logo">⚕ DICTA AI <span style="font-family:'DM Sans';font-size:.7rem;color:var(--text-muted);font-weight:300">v1.0</span></div>
+<div class="disclaimer">⚕ DICTA AI es un asistente documental. Toda información requiere validación médica profesional antes de ser utilizada clínicamente.</div>
+<div class="user-info">
+<span id="topbar-medico" style="color:var(--text-secondary)"></span>
+<span id="save-indicator" style="font-size:.7rem;opacity:.5;transition:all .3s ease"></span>
+<button class="mobile-ai-toggle" onclick="toggleAIPanel()" aria-label="Panel IA">✦</button>
+<button class="btn btn-sm btn-ghost" onclick="handleLogout()">Cerrar sesión</button>
+</div>
+</div>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+<div class="ai-overlay" id="ai-overlay" onclick="toggleAIPanel()"></div>
+
+<!-- SIDEBAR -->
+<div class="sidebar" id="main-sidebar">
+<button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+<div class="sidebar-patient" id="sidebar-patient-info">
+<div class="sidebar-section-title">Paciente Activo</div>
+<div class="name" id="sidebar-patient-name">Sin paciente</div>
+<div class="episode" id="sidebar-episode-code">—</div>
+</div>
+
+<div class="sidebar-section"><div class="sidebar-section-title">Dashboards</div></div>
+<div class="sidebar-item active" data-dashboard="paciente" onclick="switchDashboard('paciente')">📋 Datos Paciente</div>
+<div class="sidebar-item" data-dashboard="anamnesis" onclick="switchDashboard('anamnesis')">🩺 Anamnesis</div>
+<div class="sidebar-item" data-dashboard="examen" onclick="switchDashboard('examen')">🔬 Examen y Dx</div>
+<div class="sidebar-item" data-dashboard="receta" onclick="switchDashboard('receta')">💊 Receta</div>
+
+<div style="border-top:1px solid var(--border-subtle);margin:8px 0"></div>
+<div class="sidebar-section"><div class="sidebar-section-title">Acciones</div></div>
+<div class="sidebar-item" onclick="nuevaConsulta()">➕ Nueva consulta</div>
+<div class="sidebar-item" onclick="generarNotaSOAP()">📝 Generar nota SOAP</div>
+<div class="sidebar-item" onclick="exportarPDF()">📄 Exportar PDF</div>
+
+<div style="flex:1"></div>
+<div style="border-top:1px solid var(--border-subtle);margin:8px 0"></div>
+<div class="sidebar-section"><div class="sidebar-section-title">Configuración</div></div>
+<div class="sidebar-item" onclick="showPerfilModal()">👤 Mi perfil</div>
+<div class="sidebar-item" onclick="handleLogout()">🚪 Cerrar sesión</div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="main-content" id="main-content">
+
+<!-- DASHBOARD 1: PACIENTE -->
+<div class="dashboard active" id="dash-paciente">
+<h2 style="margin-bottom:16px">📋 Datos del Paciente</h2>
+<div style="display:flex;gap:10px;margin-bottom:16px">
+<div class="autocomplete-wrap" style="flex:1"><input class="input" id="buscar-paciente" placeholder="Buscar paciente por nombre o CI..." oninput="buscarPaciente(this.value)"><div class="autocomplete-list" id="paciente-results"></div></div>
+<button class="btn btn-primary" onclick="nuevoPaciente()">+ Nuevo paciente</button>
+<button class="btn btn-info" onclick="guardarPaciente()">💾 Guardar</button>
+</div>
+<div class="grid-2">
+<div class="card">
+<div class="card-title"><span class="icon">👤</span>Identificación</div>
+<div class="form-group"><label>Nombre completo</label><input class="input" id="pac-nombre"></div>
+<div class="form-row">
+<div class="form-group"><label>Fecha de nacimiento</label><input class="input" type="date" id="pac-fechanac" onchange="calcularEdad()"></div>
+<div class="form-group"><label>Edad</label><input class="input" id="pac-edad" readonly></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Sexo</label><select class="select" id="pac-sexo"><option value="">Seleccionar</option><option value="masculino">Masculino</option><option value="femenino">Femenino</option><option value="otro">Otro</option></select></div>
+<div class="form-group"><label>Documento de identidad</label><input class="input" id="pac-ci"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Teléfono</label><input class="input" id="pac-telefono"></div>
+</div>
+<div class="form-group"><label>Dirección</label><textarea class="textarea" id="pac-direccion" style="min-height:50px"></textarea></div>
+</div>
+<div class="card">
+<div class="card-title"><span class="icon">📞</span>Contacto de emergencia</div>
+<div class="form-group"><label>Nombre</label><input class="input" id="pac-emerg-nombre"></div>
+<div class="form-row">
+<div class="form-group"><label>Teléfono</label><input class="input" id="pac-emerg-tel"></div>
+<div class="form-group"><label>Parentesco</label><input class="input" id="pac-emerg-parentesco"></div>
+</div>
+<div style="border-top:1px solid var(--border-subtle);margin:16px 0"></div>
+<div class="card-title"><span class="icon">📋</span>Antecedentes clínicos</div>
+<div class="form-group"><label>Antecedentes personales</label><textarea class="textarea" id="pac-ant-personales"></textarea></div>
+<div class="form-group"><label>Antecedentes patológicos</label><textarea class="textarea" id="pac-ant-patologicos"></textarea></div>
+</div>
+</div>
+<div class="grid-2" style="margin-top:16px">
+<div class="card">
+<div class="card-title"><span class="icon">💊</span>Medicación habitual</div>
+<div id="medicacion-habitual-list"></div>
+<button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="agregarMedicacionHabitual()">+ Agregar medicación</button>
+</div>
+<div class="card">
+<div class="card-title"><span class="icon">⚠️</span>Alergias</div>
+<div id="alergias-alert"></div>
+<div id="alergias-list"></div>
+<button class="btn btn-sm btn-ghost" style="margin-top:8px" onclick="agregarAlergia()">+ Agregar alergia</button>
+</div>
+</div>
+<div style="margin-top:16px"><button class="btn btn-primary btn-lg" onclick="nuevaConsulta()">➕ Nueva Consulta (Crear Episodio)</button></div>
+</div>
+
+<!-- DASHBOARD 2: ANAMNESIS -->
+<div class="dashboard" id="dash-anamnesis">
+<h2 style="margin-bottom:16px">🩺 Anamnesis</h2>
+<div class="recording-bar" id="recording-bar">
+<button class="btn btn-danger btn-sm" id="btn-grabar" onclick="toggleGrabacion('start')">● GRABAR</button>
+<button class="btn btn-warn btn-sm" onclick="toggleGrabacion('pause')" style="display:none" id="btn-pausar">⏸ PAUSAR</button>
+<button class="btn btn-info btn-sm" onclick="toggleGrabacion('resume')" style="display:none" id="btn-reanudar">▶ REANUDAR</button>
+<button class="btn btn-ghost btn-sm" onclick="toggleGrabacion('stop')" id="btn-detener" style="display:none">⏹ DETENER</button>
+<span class="rec-indicator" id="rec-indicator"></span>
+<span id="rec-status" style="font-size:.8rem;color:var(--text-muted)"></span>
+<div style="flex:1"></div>
+<div class="speaker-toggle">
+<button class="speaker-btn paciente" id="spk-paciente" onclick="cambiarHablante('paciente')">👤 PACIENTE</button>
+<button class="speaker-btn medico inactive" id="spk-medico" onclick="cambiarHablante('medico')">👨‍⚕️ MÉDICO</button>
+</div>
+<div class="waveform-container" id="waveform-container">
+<span class="waveform-label">● Captando audio</span>
+<canvas id="waveform-canvas" height="64"></canvas>
+</div>
+</div>
+<div id="transcripcion-live" class="transcription-area" style="margin-bottom:16px;display:none"></div>
+<div id="versiones-ia" style="display:none;margin-bottom:16px">
+<div class="card"><div class="card-title"><span class="icon">✦</span>Versiones de redacción médica</div><div id="versiones-container" class="version-cards"></div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn btn-primary btn-sm" onclick="confirmarVersion()">✓ Confirmar selección</button><button class="btn btn-ghost btn-sm" onclick="editarManual()">✎ Editar manualmente</button></div></div>
+</div>
+
+<div class="expandable open" id="exp-motivo">
+<div class="expandable-header" onclick="toggleExpandable('exp-motivo')"><span>📌 Motivo de consulta</span><span>▼</span></div>
+<div class="expandable-body">
+<div style="display:flex;gap:8px;margin-bottom:8px"><label style="margin:0;font-size:.75rem">Sección destino de grabación:</label><select class="select" style="width:auto;padding:4px 8px;font-size:.75rem" id="seccion-destino"><option value="motivo_consulta">Motivo de consulta</option><option value="enfermedad_actual">Enfermedad actual</option></select></div>
+<textarea class="textarea" id="anamnesis-motivo" placeholder="Motivo de consulta del paciente..." style="min-height:100px"></textarea>
+</div>
+</div>
+<div class="expandable" id="exp-enfermedad">
+<div class="expandable-header" onclick="toggleExpandable('exp-enfermedad')"><span>🏥 Enfermedad actual</span><span>▼</span></div>
+<div class="expandable-body"><textarea class="textarea" id="anamnesis-enfermedad" placeholder="Descripción de la enfermedad actual..." style="min-height:120px"></textarea></div>
+</div>
+<div class="expandable" id="exp-ant-pers">
+<div class="expandable-header" onclick="toggleExpandable('exp-ant-pers')"><span>📁 Antecedentes personales</span><span>▶</span></div>
+<div class="expandable-body"><textarea class="textarea" id="anamnesis-ant-personales" placeholder="Antecedentes personales..."></textarea></div>
+</div>
+<div class="expandable" id="exp-ant-pat">
+<div class="expandable-header" onclick="toggleExpandable('exp-ant-pat')"><span>⚠️ Antecedentes patológicos relevantes</span><span>▶</span></div>
+<div class="expandable-body"><textarea class="textarea" id="anamnesis-ant-patologicos" placeholder="Antecedentes patológicos..."></textarea></div>
+</div>
+<div class="expandable" id="exp-medicacion">
+<div class="expandable-header" onclick="toggleExpandable('exp-medicacion')"><span>💊 Medicación habitual</span><span>▶</span></div>
+<div class="expandable-body"><textarea class="textarea" id="anamnesis-medicacion" placeholder="Medicación habitual del paciente..."></textarea></div>
+</div>
+<div class="expandable" id="exp-alergias">
+<div class="expandable-header" onclick="toggleExpandable('exp-alergias')"><span>🚨 Alergias</span><span>▶</span></div>
+<div class="expandable-body"><div id="anamnesis-alergias-ref" style="font-size:.85rem;color:var(--text-secondary)">Las alergias se gestionan desde el Dashboard de Datos del Paciente.</div></div>
+</div>
+</div>
+
+<!-- DASHBOARD 3: EXAMEN Y DX -->
+<div class="dashboard" id="dash-examen">
+<h2 style="margin-bottom:16px">🔬 Examen Físico y Diagnóstico</h2>
+<div class="grid-2">
+<div class="card">
+<div class="card-title"><span class="icon">❤️</span>Signos vitales</div>
+<div class="form-row"><div class="form-group"><label>Presión arterial (mmHg)</label><input class="input" id="sv-pa" placeholder="120/80"></div><div class="form-group"><label>FC (lpm)</label><input class="input" id="sv-fc" placeholder="72"></div></div>
+<div class="form-row"><div class="form-group"><label>FR (rpm)</label><input class="input" id="sv-fr" placeholder="16"></div><div class="form-group"><label>Temperatura (°C)</label><input class="input" id="sv-temp" placeholder="36.5"></div></div>
+<div class="form-row"><div class="form-group"><label>SatO₂ (%)</label><input class="input" id="sv-sat" placeholder="98"></div><div class="form-group"><label>Glucemia (mg/dL)</label><input class="input" id="sv-gluc" placeholder="Opcional"></div></div>
+<div class="form-row"><div class="form-group"><label>Peso (kg)</label><input class="input" id="sv-peso" placeholder="70" oninput="calcularIMC()"></div><div class="form-group"><label>Talla (cm)</label><input class="input" id="sv-talla" placeholder="170" oninput="calcularIMC()"></div><div class="form-group"><label>IMC</label><input class="input" id="sv-imc" readonly></div></div>
+</div>
+<div class="card">
+<div class="card-title"><span class="icon">🔍</span>Examen físico</div>
+<div id="examen-fisico-sections"></div>
+</div>
+</div>
+<div class="grid-2" style="margin-top:16px">
+<div class="card">
+<div class="card-title"><span class="icon">🏷️</span>Diagnóstico — CIE-10</div>
+<div class="autocomplete-wrap" style="margin-bottom:12px"><input class="input" id="dx-search" placeholder="Buscar diagnóstico por nombre o código CIE-10..." oninput="buscarCIE10(this.value)"><div class="autocomplete-list" id="cie10-results"></div></div>
+<div style="display:flex;gap:8px;margin-bottom:12px">
+<select class="select" id="dx-tipo" style="width:auto"><option value="principal">Principal</option><option value="diferencial">Diferencial</option><option value="descartado">Descartado</option></select>
+<button class="btn btn-sm btn-primary" onclick="agregarDiagnostico()">+ Agregar Dx</button>
+<button class="btn btn-sm btn-info" onclick="sugerirDiagnosticos()">✦ Sugerir Dx con IA</button>
+</div>
+<div class="dx-list" id="dx-list"></div>
+</div>
+<div class="card">
+<div class="card-title"><span class="icon">📋</span>Plan diagnóstico y conducta</div>
+<div class="form-group"><label>Estudios solicitados</label><div id="estudios-list"></div><button class="btn btn-sm btn-ghost" style="margin-top:6px" onclick="agregarEstudio()">+ Agregar estudio</button></div>
+<div class="form-group"><label>Conducta</label><textarea class="textarea" id="plan-conducta" placeholder="Conducta a seguir..."></textarea></div>
+<div class="form-group"><label>Derivaciones</label><input class="input" id="plan-derivaciones" placeholder="Especialidad a la que se deriva..."></div>
+</div>
+</div>
+</div>
+
+<!-- DASHBOARD 4: RECETA -->
+<div class="dashboard" id="dash-receta">
+<h2 style="margin-bottom:16px">💊 Receta Médica Inteligente</h2>
+<div class="card" style="margin-bottom:16px">
+<div class="card-title"><span class="icon">📋</span>Encabezado de la receta</div>
+<div class="grid-3">
+<div><label>Médico</label><span id="rx-medico" class="mono" style="font-size:.85rem;color:var(--text-secondary)">—</span></div>
+<div><label>Especialidad / Matrícula</label><span id="rx-especialidad" class="mono" style="font-size:.85rem;color:var(--text-secondary)">—</span></div>
+<div><label>Fecha</label><span id="rx-fecha" class="mono" style="font-size:.85rem;color:var(--text-secondary)">—</span></div>
+</div>
+<div class="grid-3" style="margin-top:10px">
+<div><label>Paciente</label><span id="rx-paciente" style="font-size:.85rem;color:var(--text-secondary)">—</span></div>
+<div><label>Diagnóstico</label><span id="rx-diagnostico" style="font-size:.85rem;color:var(--text-secondary)">—</span></div>
+<div><label>N° Correlativo</label><input class="input" id="rx-correlativo" style="max-width:120px" readonly></div>
+</div>
+</div>
+<div class="card" style="margin-bottom:16px">
+<div class="card-title"><span class="icon">💊</span>Prescripción</div>
+<div id="medicamentos-list"></div>
+<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+<button class="btn btn-primary btn-sm" onclick="agregarMedicamento()">+ Agregar medicamento</button>
+<button class="btn btn-info btn-sm" onclick="sugerirMedicacion()">✦ Sugerir medicación con IA</button>
+</div>
+</div>
+<div style="display:flex;gap:10px;flex-wrap:wrap">
+<button class="btn btn-primary btn-lg" onclick="validarReceta()">✓ Validar y emitir receta</button>
+<button class="btn btn-ghost" onclick="imprimirReceta()">🖨 Imprimir receta</button>
+<button class="btn btn-ghost" onclick="exportarRecetaPDF()">📄 Exportar PDF</button>
+</div>
+</div>
+
+</div><!-- end main-content -->
+
+<!-- AI PANEL -->
+<div class="ai-panel">
+<div class="ai-panel-title">✦ Panel de IA</div>
+<div class="card" style="margin-bottom:12px;padding:14px">
+<div class="card-title" style="font-size:.9rem"><span class="icon">⚠️</span>Sugerencias activas</div>
+<div id="ai-sugerencias" style="font-size:.8rem;color:var(--text-secondary)">Sin sugerencias activas.</div>
+</div>
+<div class="card" style="margin-bottom:12px;padding:14px">
+<div class="card-title" style="font-size:.9rem"><span class="icon">🏷️</span>Trazabilidad</div>
+<div id="ai-trazabilidad" style="font-size:.8rem;color:var(--text-secondary)">Sin registros de trazabilidad.</div>
+</div>
+<div class="card" style="padding:14px">
+<div class="card-title" style="font-size:.9rem"><span class="icon">⚡</span>Acciones rápidas</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<button class="btn btn-primary btn-sm" style="width:100%;justify-content:flex-start" onclick="generarNotaSOAP()">✦ Generar nota SOAP completa</button>
+<button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start" onclick="generarResumenPaciente()">📋 Resumen para el paciente</button>
+<button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start" onclick="sugerirDiagnosticos()">✦ Sugerir diagnósticos</button>
+<button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start" onclick="sugerirMedicacion()">✦ Sugerir medicación</button>
+<button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start" onclick="revisarCamposIncompletos()">⚠ Revisar campos incompletos</button>
+</div>
+</div>
+</div>
+
+</div><!-- end app-container -->
+
+<!-- PERFIL MODAL -->
+<div class="modal-overlay" id="perfil-modal">
+<div class="modal">
+<h2>Mi Perfil Médico</h2>
+<div class="form-group"><label>Nombre completo</label><input class="input" id="perfil-nombre"></div>
+<div class="form-group"><label>Especialidad</label><input class="input" id="perfil-especialidad"></div>
+<div class="form-group"><label>Matrícula</label><input class="input" id="perfil-matricula"></div>
+<div class="form-group"><label>Sello (texto)</label><textarea class="textarea" id="perfil-sello" style="min-height:50px"></textarea></div>
+<div class="modal-actions">
+<button class="btn btn-ghost" onclick="closeModal('perfil-modal')">Cancelar</button>
+<button class="btn btn-primary" onclick="guardarPerfil()">Guardar perfil</button>
+</div>
+</div>
+</div>
+
+<!-- NOTA SOAP MODAL -->
+<div class="modal-overlay" id="soap-modal">
+<div class="modal" style="max-width:700px">
+<h2>📝 Nota Clínica SOAP</h2>
+<div id="soap-content" style="white-space:pre-wrap;font-size:.9rem;line-height:1.7;color:var(--text-secondary);max-height:60vh;overflow-y:auto;padding:16px;background:var(--bg-surface);border-radius:var(--radius)"></div>
+<div class="modal-actions">
+<button class="btn btn-ghost" onclick="closeModal('soap-modal')">Cerrar</button>
+<button class="btn btn-info" onclick="copiarSOAP()">📋 Copiar</button>
+<button class="btn btn-primary" onclick="validarNota()">✓ Validar nota</button>
+</div>
+</div>
+</div>
+
+<!-- PRINT AREA -->
+<div id="print-area"></div>
+
+<script>
+// ===== CONFIGURACIÓN =====
+const SUPABASE_URL = 'TU_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'TU_SUPABASE_ANON_KEY';
+const GEMINI_API_KEY = 'AIzaSyA776N1uytEs-i4uR-YZ2Z9vw9PwC0u2a4';
+
+let supabaseClient = null;
+try { supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e) { console.warn('Supabase no configurado:', e); }
+
+// ===== ESTADO GLOBAL =====
+window.appState = {
+  medico: null, pacienteActivo: null, episodioActivo: null, notaActiva: null,
+  dashboardActual: 'paciente', modoHablante: 'paciente', grabando: false,
+  recognition: null, transcripcionActual: '', transcripcionesGuardadas: {},
+  cie10: [], medicamentosFrecuentes: [], diagnosticosActivos: [],
+  medicamentosReceta: [], alergiasActivas: [], medicacionHabitual: [],
+  estudios: [], notaSOAP: ''
+};
+
+// ===== CIE-10 DATA (80+ entries) =====
+const CIE10_DATA = [
+  {codigo:"A09",nombre:"Diarrea y gastroenteritis de presunto origen infeccioso"},
+  {codigo:"A15",nombre:"Tuberculosis respiratoria"},
+  {codigo:"B34.9",nombre:"Infección viral no especificada"},
+  {codigo:"B82",nombre:"Parasitosis intestinal sin otra especificación"},
+  {codigo:"D50",nombre:"Anemia por deficiencia de hierro"},
+  {codigo:"D64.9",nombre:"Anemia no especificada"},
+  {codigo:"E03",nombre:"Hipotiroidismo no especificado"},
+  {codigo:"E05",nombre:"Tirotoxicosis (hipertiroidismo)"},
+  {codigo:"E10",nombre:"Diabetes mellitus tipo 1"},
+  {codigo:"E11",nombre:"Diabetes mellitus tipo 2"},
+  {codigo:"E14",nombre:"Diabetes mellitus no especificada"},
+  {codigo:"E66",nombre:"Obesidad"},
+  {codigo:"E78",nombre:"Trastornos del metabolismo de las lipoproteínas (dislipidemia)"},
+  {codigo:"F32",nombre:"Episodio depresivo"},
+  {codigo:"F41",nombre:"Trastornos de ansiedad"},
+  {codigo:"F41.0",nombre:"Trastorno de pánico"},
+  {codigo:"F51",nombre:"Trastornos no orgánicos del sueño"},
+  {codigo:"G43",nombre:"Migraña"},
+  {codigo:"G44.2",nombre:"Cefalea tensional"},
+  {codigo:"G47",nombre:"Trastornos del sueño"},
+  {codigo:"H10",nombre:"Conjuntivitis"},
+  {codigo:"H65",nombre:"Otitis media no supurativa"},
+  {codigo:"H66",nombre:"Otitis media supurativa"},
+  {codigo:"I10",nombre:"Hipertensión esencial (primaria)"},
+  {codigo:"I20",nombre:"Angina de pecho"},
+  {codigo:"I25",nombre:"Enfermedad isquémica crónica del corazón"},
+  {codigo:"I48",nombre:"Fibrilación y aleteo auricular"},
+  {codigo:"I50",nombre:"Insuficiencia cardíaca"},
+  {codigo:"I63",nombre:"Infarto cerebral (ACV isquémico)"},
+  {codigo:"I84",nombre:"Hemorroides"},
+  {codigo:"J00",nombre:"Rinofaringitis aguda (resfriado común)"},
+  {codigo:"J01",nombre:"Sinusitis aguda"},
+  {codigo:"J02",nombre:"Faringitis aguda"},
+  {codigo:"J03",nombre:"Amigdalitis aguda"},
+  {codigo:"J04",nombre:"Laringitis y traqueítis aguda"},
+  {codigo:"J06.9",nombre:"Infección aguda de las vías respiratorias superiores"},
+  {codigo:"J18",nombre:"Neumonía no especificada"},
+  {codigo:"J20",nombre:"Bronquitis aguda"},
+  {codigo:"J30",nombre:"Rinitis alérgica"},
+  {codigo:"J44",nombre:"Enfermedad pulmonar obstructiva crónica (EPOC)"},
+  {codigo:"J45",nombre:"Asma"},
+  {codigo:"K02",nombre:"Caries dental"},
+  {codigo:"K04",nombre:"Enfermedades de la pulpa dental"},
+  {codigo:"K21",nombre:"Enfermedad por reflujo gastroesofágico"},
+  {codigo:"K25",nombre:"Úlcera gástrica"},
+  {codigo:"K29",nombre:"Gastritis y duodenitis"},
+  {codigo:"K30",nombre:"Dispepsia funcional"},
+  {codigo:"K35",nombre:"Apendicitis aguda"},
+  {codigo:"K40",nombre:"Hernia inguinal"},
+  {codigo:"K58",nombre:"Síndrome de intestino irritable"},
+  {codigo:"K59.0",nombre:"Constipación"},
+  {codigo:"K76",nombre:"Otras enfermedades del hígado (esteatosis hepática)"},
+  {codigo:"K80",nombre:"Colelitiasis"},
+  {codigo:"K92.1",nombre:"Melena"},
+  {codigo:"L20",nombre:"Dermatitis atópica"},
+  {codigo:"L30",nombre:"Dermatitis no especificada"},
+  {codigo:"L50",nombre:"Urticaria"},
+  {codigo:"L70",nombre:"Acné"},
+  {codigo:"M06",nombre:"Artritis reumatoide"},
+  {codigo:"M15",nombre:"Poliartrosis"},
+  {codigo:"M17",nombre:"Gonartrosis (artrosis de rodilla)"},
+  {codigo:"M19",nombre:"Otras artrosis"},
+  {codigo:"M25.5",nombre:"Dolor articular"},
+  {codigo:"M54.2",nombre:"Cervicalgia"},
+  {codigo:"M54.5",nombre:"Lumbago no especificado"},
+  {codigo:"M79.1",nombre:"Mialgia"},
+  {codigo:"N10",nombre:"Nefritis tubulointersticial aguda (pielonefritis)"},
+  {codigo:"N20",nombre:"Cálculo del riñón y del uréter"},
+  {codigo:"N30",nombre:"Cistitis"},
+  {codigo:"N39.0",nombre:"Infección de vías urinarias"},
+  {codigo:"N76",nombre:"Vaginitis aguda"},
+  {codigo:"N92",nombre:"Menstruación excesiva, frecuente e irregular"},
+  {codigo:"O80",nombre:"Parto único espontáneo"},
+  {codigo:"R05",nombre:"Tos"},
+  {codigo:"R06.0",nombre:"Disnea"},
+  {codigo:"R10",nombre:"Dolor abdominal y pélvico"},
+  {codigo:"R11",nombre:"Náusea y vómito"},
+  {codigo:"R42",nombre:"Mareo y desvanecimiento"},
+  {codigo:"R50",nombre:"Fiebre de causa desconocida"},
+  {codigo:"R51",nombre:"Cefalea"},
+  {codigo:"R52",nombre:"Dolor no clasificado en otra parte"},
+  {codigo:"S93",nombre:"Esguince de tobillo"},
+  {codigo:"T78.4",nombre:"Alergia no especificada"},
+  {codigo:"Z00",nombre:"Examen general e investigación de personas sin quejas"},
+  {codigo:"Z30",nombre:"Anticoncepción"},
+  {codigo:"Z34",nombre:"Supervisión de embarazo normal"},
+  {codigo:"Z76.0",nombre:"Emisión de receta repetida"}
+];
+window.appState.cie10 = CIE10_DATA;
+
+// ===== UTILIDADES =====
+function showToast(msg, type='success', duration=4000) {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + type;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transform='translateY(-10px)'; setTimeout(()=>t.remove(), 300); }, duration);
+}
+
+function showModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+function showConfirm(title, message, onOk) {
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-message').textContent = message;
+  const btn = document.getElementById('confirm-ok-btn');
+  btn.onclick = function() { closeModal('confirm-modal'); onOk(); };
+  showModal('confirm-modal');
+}
+
+function togglePasswordVisibility(inputId, btn) {
+  const inp = document.getElementById(inputId);
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+}
+
+function calcularEdad() {
+  const fn = document.getElementById('pac-fechanac').value;
+  if (!fn) return;
+  const birth = new Date(fn); const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  document.getElementById('pac-edad').value = age + ' años';
+}
+
+function calcularIMC() {
+  const p = parseFloat(document.getElementById('sv-peso').value);
+  const t = parseFloat(document.getElementById('sv-talla').value);
+  if (p && t) { const imc = (p / ((t/100) * (t/100))).toFixed(1); document.getElementById('sv-imc').value = imc; }
+}
+
+function generarCodigo() {
+  const y = new Date().getFullYear();
+  const n = String(Math.floor(Math.random()*99999)).padStart(5,'0');
+  return 'EP-' + y + '-' + n;
+}
+
+function generarUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random()*16|0; return (c==='x' ? r : (r&0x3|0x8)).toString(16);
+  });
+}
+
+// ===== AUTENTICACIÓN =====
+async function handleLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-password').value;
+  if (!email || !pass) { showToast('Ingrese correo y contraseña','warning'); return; }
+  if (!supabaseClient || SUPABASE_URL === 'TU_SUPABASE_URL') {
+    // Demo mode
+    window.appState.medico = { id: generarUUID(), nombre_completo: 'Dr. Demo', especialidad: 'Medicina General', matricula: 'MP-00000', preferencias: { ultimo_correlativo_receta: 0, plantilla_favorita: 'soap' } };
+    initApp();
+    return;
+  }
+  try {
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
+    if (error) throw error;
+    const { data: med } = await supabaseClient.from('medicos').select('*').eq('id', data.user.id).single();
+    window.appState.medico = med;
+    initApp();
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+function showRegisterModal() { showModal('register-modal'); }
+
+async function handleRegister() {
+  const nombre = document.getElementById('reg-nombre').value.trim();
+  const esp = document.getElementById('reg-especialidad').value.trim();
+  const mat = document.getElementById('reg-matricula').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass = document.getElementById('reg-password').value;
+  if (!nombre || !email || !pass) { showToast('Complete los campos obligatorios','warning'); return; }
+  if (!supabaseClient || SUPABASE_URL === 'TU_SUPABASE_URL') {
+    window.appState.medico = { id: generarUUID(), nombre_completo: nombre, especialidad: esp, matricula: mat, preferencias: { ultimo_correlativo_receta: 0 } };
+    closeModal('register-modal');
+    initApp();
+    return;
+  }
+  try {
+    const { data, error } = await supabaseClient.auth.signUp({ email, password: pass });
+    if (error) throw error;
+    await supabaseClient.from('medicos').insert({ id: data.user.id, nombre_completo: nombre, especialidad: esp, matricula: mat });
+    window.appState.medico = { id: data.user.id, nombre_completo: nombre, especialidad: esp, matricula: mat, preferencias: { ultimo_correlativo_receta: 0 } };
+    closeModal('register-modal');
+    initApp();
+    showToast('Cuenta creada exitosamente');
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function handleLogout() {
+  showConfirm('Cerrar sesión', '¿Está seguro de que desea cerrar sesión?', async function() {
+    if (supabaseClient && SUPABASE_URL !== 'TU_SUPABASE_URL') { await supabaseClient.auth.signOut(); }
+    window.appState = { medico:null, pacienteActivo:null, episodioActivo:null, notaActiva:null, dashboardActual:'paciente', modoHablante:'paciente', grabando:false, recognition:null, transcripcionActual:'', transcripcionesGuardadas:{}, cie10:CIE10_DATA, medicamentosFrecuentes:[], diagnosticosActivos:[], medicamentosReceta:[], alergiasActivas:[], medicacionHabitual:[], estudios:[], notaSOAP:'' };
+    document.getElementById('app-container').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+  });
+}
+
+async function checkSession() {
+  if (!supabaseClient || SUPABASE_URL === 'TU_SUPABASE_URL') return;
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) {
+      const { data: med } = await supabaseClient.from('medicos').select('*').eq('id', session.user.id).single();
+      if (med) { window.appState.medico = med; initApp(); }
+    }
+  } catch(e) { console.warn('No session:', e); }
+}
+
+// ===== INIT APP =====
+function initApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-container').style.display = 'grid';
+  document.getElementById('topbar-medico').textContent = window.appState.medico.nombre_completo || 'Médico';
+  initExamenFisico();
+  actualizarRecetaHeader();
+  showToast('Bienvenido, ' + window.appState.medico.nombre_completo);
+}
+
+// ===== NAVIGATION =====
+function switchDashboard(name) {
+  window.appState.dashboardActual = name;
+  document.querySelectorAll('.dashboard').forEach(d => d.classList.remove('active'));
+  document.getElementById('dash-' + name).classList.add('active');
+  document.querySelectorAll('.sidebar-item[data-dashboard]').forEach(i => {
+    i.classList.toggle('active', i.dataset.dashboard === name);
+  });
+  if (name === 'receta') actualizarRecetaHeader();
+}
+
+function toggleExpandable(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('open');
+  const arrow = el.querySelector('.expandable-header span:last-child');
+  arrow.textContent = el.classList.contains('open') ? '▼' : '▶';
+}
+
+// ===== PACIENTE FUNCTIONS =====
+function nuevoPaciente() {
+  window.appState.pacienteActivo = null;
+  ['pac-nombre','pac-fechanac','pac-edad','pac-ci','pac-telefono','pac-direccion','pac-emerg-nombre','pac-emerg-tel','pac-emerg-parentesco','pac-ant-personales','pac-ant-patologicos'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('pac-sexo').value = '';
+  window.appState.alergiasActivas = [];
+  window.appState.medicacionHabitual = [];
+  renderAlergias(); renderMedicacionHabitual();
+  showToast('Formulario limpio para nuevo paciente','info');
+}
+
+async function guardarPaciente() {
+  const nombre = document.getElementById('pac-nombre').value.trim();
+  if (!nombre) { showToast('El nombre del paciente es obligatorio','warning'); return; }
+  const pacData = {
+    nombre_completo: nombre,
+    fecha_nacimiento: document.getElementById('pac-fechanac').value || null,
+    sexo: document.getElementById('pac-sexo').value || null,
+    documento_identidad: document.getElementById('pac-ci').value.trim(),
+    telefono: document.getElementById('pac-telefono').value.trim(),
+    direccion: document.getElementById('pac-direccion').value.trim(),
+    contacto_emergencia: { nombre: document.getElementById('pac-emerg-nombre').value.trim(), telefono: document.getElementById('pac-emerg-tel').value.trim(), parentesco: document.getElementById('pac-emerg-parentesco').value.trim() },
+    alergias: window.appState.alergiasActivas,
+    medicacion_habitual: window.appState.medicacionHabitual,
+    antecedentes: { personales: document.getElementById('pac-ant-personales').value, patologicos: document.getElementById('pac-ant-patologicos').value }
+  };
+  if (supabaseClient && SUPABASE_URL !== 'TU_SUPABASE_URL') {
+    try {
+      pacData.medico_id = window.appState.medico.id;
+      if (window.appState.pacienteActivo) {
+        const { error } = await supabaseClient.from('pacientes').update(pacData).eq('id', window.appState.pacienteActivo.id);
+        if (error) throw error;
+        window.appState.pacienteActivo = { ...window.appState.pacienteActivo, ...pacData };
+      } else {
+        const { data, error } = await supabaseClient.from('pacientes').insert(pacData).select().single();
+        if (error) throw error;
+        window.appState.pacienteActivo = data;
+      }
+      registrarAuditoria('pacientes', window.appState.pacienteActivo.id, window.appState.pacienteActivo ? 'editar' : 'crear');
+    } catch(e) { showToast('Error al guardar: ' + e.message, 'error'); return; }
+  } else {
+    if (!window.appState.pacienteActivo) { pacData.id = generarUUID(); }
+    window.appState.pacienteActivo = { ...(window.appState.pacienteActivo || {}), ...pacData };
+  }
+  actualizarSidebarPaciente();
+  showToast('Paciente guardado correctamente');
+}
+
+async function buscarPaciente(query) {
+  const list = document.getElementById('paciente-results');
+  if (query.length < 2) { list.classList.remove('show'); return; }
+  if (supabaseClient && SUPABASE_URL !== 'TU_SUPABASE_URL') {
+    try {
+      const { data } = await supabaseClient.from('pacientes').select('*').eq('medico_id', window.appState.medico.id).or(`nombre_completo.ilike.%${query}%,documento_identidad.ilike.%${query}%`).limit(8);
+      renderPacienteResults(data || [], list);
+    } catch(e) { console.error(e); }
+  } else { list.innerHTML = '<div class="autocomplete-item" style="color:var(--text-muted)">Modo demo: no hay búsqueda</div>'; list.classList.add('show'); }
+}
+
+function renderPacienteResults(results, container) {
+  if (!results.length) { container.innerHTML = '<div class="autocomplete-item" style="color:var(--text-muted)">Sin resultados</div>'; container.classList.add('show'); return; }
+  container.innerHTML = results.map((p,i) => `<div class="autocomplete-item" onclick="seleccionarPaciente(${i})" data-idx="${i}"><strong>${p.nombre_completo}</strong> <span class="code">${p.documento_identidad||''}</span></div>`).join('');
+  container.classList.add('show');
+  container._data = results;
+}
+
+function seleccionarPaciente(idx) {
+  const list = document.getElementById('paciente-results');
+  const p = list._data[idx];
+  window.appState.pacienteActivo = p;
+  document.getElementById('pac-nombre').value = p.nombre_completo || '';
+  document.getElementById('pac-fechanac').value = p.fecha_nacimiento || '';
+  calcularEdad();
+  document.getElementById('pac-sexo').value = p.sexo || '';
+  document.getElementById('pac-ci').value = p.documento_identidad || '';
+  document.getElementById('pac-telefono').value = p.telefono || '';
+  document.getElementById('pac-direccion').value = p.direccion || '';
+  if (p.contacto_emergencia) {
+    document.getElementById('pac-emerg-nombre').value = p.contacto_emergencia.nombre || '';
+    document.getElementById('pac-emerg-tel').value = p.contacto_emergencia.telefono || '';
+    document.getElementById('pac-emerg-parentesco').value = p.contacto_emergencia.parentesco || '';
+  }
+  if (p.antecedentes) {
+    document.getElementById('pac-ant-personales').value = p.antecedentes.personales || '';
+    document.getElementById('pac-ant-patologicos').value = p.antecedentes.patologicos || '';
+  }
+  window.appState.alergiasActivas = Array.isArray(p.alergias) ? p.alergias : [];
+  window.appState.medicacionHabitual = Array.isArray(p.medicacion_habitual) ? p.medicacion_habitual : [];
+  renderAlergias(); renderMedicacionHabitual(); actualizarSidebarPaciente();
+  list.classList.remove('show');
+  document.getElementById('buscar-paciente').value = '';
+  showToast('Paciente cargado: ' + p.nombre_completo, 'info');
+}
+
+function actualizarSidebarPaciente() {
+  const p = window.appState.pacienteActivo;
+  document.getElementById('sidebar-patient-name').textContent = p ? p.nombre_completo : 'Sin paciente';
+  document.getElementById('sidebar-episode-code').textContent = window.appState.episodioActivo ? window.appState.episodioActivo.codigo : '—';
+}
+
+// ===== ALERGIAS =====
+function agregarAlergia() {
+  window.appState.alergiasActivas.push({ sustancia: '', tipo: 'medicamento', confirmada: false });
+  renderAlergias();
+}
+
+function renderAlergias() {
+  const c = document.getElementById('alergias-list');
+  const alert = document.getElementById('alergias-alert');
+  const als = window.appState.alergiasActivas;
+  const noConfirmadas = als.filter(a => !a.confirmada && a.sustancia);
+  alert.innerHTML = noConfirmadas.length ? '<div class="alert-banner alert-banner-warn">⚠ Verificar antecedente alérgico antes de emitir receta</div>' : '';
+  c.innerHTML = als.map((a, i) => `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+    <input class="input" style="flex:2" value="${a.sustancia}" placeholder="Sustancia" onchange="window.appState.alergiasActivas[${i}].sustancia=this.value">
+    <select class="select" style="flex:1" onchange="window.appState.alergiasActivas[${i}].tipo=this.value">
+      <option value="medicamento" ${a.tipo==='medicamento'?'selected':''}>Medicamento</option>
+      <option value="alimento" ${a.tipo==='alimento'?'selected':''}>Alimento</option>
+      <option value="ambiental" ${a.tipo==='ambiental'?'selected':''}>Ambiental</option>
+      <option value="otro" ${a.tipo==='otro'?'selected':''}>Otro</option>
+    </select>
+    <label style="display:flex;align-items:center;gap:3px;margin:0;text-transform:none;font-size:.8rem;white-space:nowrap"><input type="checkbox" ${a.confirmada?'checked':''} onchange="window.appState.alergiasActivas[${i}].confirmada=this.checked;renderAlergias()">Confirmada</label>
+    <button class="btn btn-sm btn-danger btn-icon" onclick="window.appState.alergiasActivas.splice(${i},1);renderAlergias()">🗑</button>
+  </div>`).join('');
+}
+
+// ===== MEDICACIÓN HABITUAL =====
+function agregarMedicacionHabitual() {
+  window.appState.medicacionHabitual.push({ nombre: '', dosis: '' });
+  renderMedicacionHabitual();
+}
+
+function renderMedicacionHabitual() {
+  const c = document.getElementById('medicacion-habitual-list');
+  c.innerHTML = window.appState.medicacionHabitual.map((m, i) => `<div style="display:flex;gap:6px;margin-bottom:6px">
+    <input class="input" style="flex:2" value="${m.nombre}" placeholder="Medicamento" onchange="window.appState.medicacionHabitual[${i}].nombre=this.value">
+    <input class="input" style="flex:1" value="${m.dosis}" placeholder="Dosis" onchange="window.appState.medicacionHabitual[${i}].dosis=this.value">
+    <button class="btn btn-sm btn-danger btn-icon" onclick="window.appState.medicacionHabitual.splice(${i},1);renderMedicacionHabitual()">🗑</button>
+  </div>`).join('');
+}
+
+// ===== NUEVA CONSULTA =====
+async function nuevaConsulta() {
+  if (!window.appState.pacienteActivo) { showToast('Primero seleccione o cree un paciente','warning'); return; }
+  const codigo = generarCodigo();
+  const epData = { codigo, paciente_id: window.appState.pacienteActivo.id, medico_id: window.appState.medico.id, tipo_atencion: 'consulta_externa', fecha_atencion: new Date().toISOString().split('T')[0], hora_atencion: new Date().toTimeString().split(' ')[0], estado: 'borrador' };
+  if (supabaseClient && SUPABASE_URL !== 'TU_SUPABASE_URL') {
+    try {
+      const { data, error } = await supabaseClient.from('episodios').insert(epData).select().single();
+      if (error) throw error;
+      window.appState.episodioActivo = data;
+      registrarAuditoria('episodios', data.id, 'crear');
+    } catch(e) { showToast('Error: ' + e.message, 'error'); return; }
+  } else { epData.id = generarUUID(); window.appState.episodioActivo = epData; }
+  actualizarSidebarPaciente();
+  switchDashboard('anamnesis');
+  showToast('Nueva consulta creada: ' + codigo);
+}
+
+// ===== WAVEFORM VISUALIZER =====
+var waveformCtx = null;
+var waveformAnimId = null;
+var audioContext = null;
+var analyser = null;
+var micStream = null;
+var waveformTime = 0;
+var waveformDataArray = null;
+
+function initWaveform() {
+  var canvas = document.getElementById('waveform-canvas');
+  var container = document.getElementById('waveform-container');
+  var w = container.offsetWidth || 600;
+  canvas.width = w;
+  canvas.height = 64;
+  waveformCtx = canvas.getContext('2d');
+}
+
+function startWaveform() {
+  var container = document.getElementById('waveform-container');
+  container.classList.add('active');
+  container.classList.remove('paused');
+  waveformTime = 0;
+  setTimeout(function() {
+    initWaveform();
+    // Start the unified drawing loop immediately
+    drawWaveformUnified();
+    // Then try to connect real mic for enhanced visualization
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+          micStream = stream;
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          analyser = audioContext.createAnalyser();
+          analyser.fftSize = 128;
+          analyser.smoothingTimeConstant = 0.75;
+          var source = audioContext.createMediaStreamSource(stream);
+          source.connect(analyser);
+          waveformDataArray = new Uint8Array(analyser.frequencyBinCount);
+        }).catch(function(err) {
+          console.warn('Mic no disponible, usando animación base:', err);
+        });
+      }
+    } catch(e) { /* file:// protocol - animation base works fine */ }
+  }, 60);
+}
+
+function drawWaveformUnified() {
+  if (!waveformCtx) return;
+  var canvas = document.getElementById('waveform-canvas');
+  var w = canvas.width, h = canvas.height;
+  var barCount = 64;
+  var barWidth = Math.max(3, Math.floor((w / barCount) - 1.5));
+  var gap = 1.5;
+
+  function draw() {
+    waveformAnimId = requestAnimationFrame(draw);
+    waveformTime += 0.035;
+
+    // Get real mic data if available
+    var hasMicData = false;
+    if (analyser && waveformDataArray) {
+      analyser.getByteFrequencyData(waveformDataArray);
+      // Check if there's any actual audio
+      for (var c = 0; c < waveformDataArray.length; c++) {
+        if (waveformDataArray[c] > 10) { hasMicData = true; break; }
+      }
+    }
+
+    // Clear canvas
+    waveformCtx.fillStyle = '#0a0c0f';
+    waveformCtx.fillRect(0, 0, w, h);
+
+    var hablante = window.appState.modoHablante;
+    var isPaciente = (hablante === 'paciente');
+
+    for (var i = 0; i < barCount; i++) {
+      // Base animation (always active - sine wave pattern)
+      var s1 = Math.sin(waveformTime * 2.3 + i * 0.18) * 0.28;
+      var s2 = Math.sin(waveformTime * 3.7 + i * 0.3) * 0.18;
+      var s3 = Math.sin(waveformTime * 1.5 + i * 0.1) * 0.22;
+      var s4 = Math.sin(waveformTime * 5.5 + i * 0.45) * 0.12;
+      var baseVal = 0.2 + Math.abs(s1 + s2 + s3 + s4);
+      baseVal = Math.min(0.9, Math.max(0.08, baseVal));
+
+      // If real mic data available, blend it in
+      var micRatio = 0;
+      if (hasMicData && waveformDataArray && i < waveformDataArray.length) {
+        micRatio = waveformDataArray[i] / 255;
+      }
+
+      // Combined value: animated base + mic boost
+      var finalVal = hasMicData ? Math.max(baseVal * 0.4, micRatio * 1.2 + baseVal * 0.3) : baseVal;
+      finalVal = Math.min(1, finalVal);
+
+      var barHeight = Math.max(3, finalVal * h * 0.85);
+      var x = i * (barWidth + gap);
+      var yPos = (h - barHeight) / 2;
+
+      // Color based on speaker mode
+      var alpha = 0.4 + finalVal * 0.6;
+      if (isPaciente) {
+        var gVal = Math.round(140 + finalVal * 100);
+        var bVal = Math.round(130 + finalVal * 40);
+        waveformCtx.fillStyle = 'rgba(0,' + gVal + ',' + bVal + ',' + alpha + ')';
+      } else {
+        var rVal = Math.round(50 + finalVal * 27);
+        var gVal2 = Math.round(120 + finalVal * 46);
+        var bVal2 = Math.round(200 + finalVal * 55);
+        waveformCtx.fillStyle = 'rgba(' + rVal + ',' + gVal2 + ',' + bVal2 + ',' + alpha + ')';
+      }
+
+      // Draw bar with rounded appearance
+      waveformCtx.fillRect(x, yPos, barWidth, barHeight);
+
+      // Glow effect on strong bars
+      if (finalVal > 0.55) {
+        waveformCtx.shadowColor = isPaciente ? '#00d4aa' : '#4da6ff';
+        waveformCtx.shadowBlur = finalVal * 12;
+        waveformCtx.fillRect(x, yPos, barWidth, barHeight);
+        waveformCtx.shadowColor = 'transparent';
+        waveformCtx.shadowBlur = 0;
+      }
+    }
+
+    // Draw center line accent
+    waveformCtx.strokeStyle = isPaciente ? 'rgba(0,212,170,0.08)' : 'rgba(77,166,255,0.08)';
+    waveformCtx.lineWidth = 1;
+    waveformCtx.beginPath();
+    waveformCtx.moveTo(0, h / 2);
+    waveformCtx.lineTo(w, h / 2);
+    waveformCtx.stroke();
+  }
+  draw();
+}
+
+function pauseWaveform() {
+  if (waveformAnimId) { cancelAnimationFrame(waveformAnimId); waveformAnimId = null; }
+  var container = document.getElementById('waveform-container');
+  container.classList.add('paused');
+}
+
+function resumeWaveform() {
+  var container = document.getElementById('waveform-container');
+  container.classList.remove('paused');
+  drawWaveformUnified();
+}
+
+function stopWaveform() {
+  if (waveformAnimId) { cancelAnimationFrame(waveformAnimId); waveformAnimId = null; }
+  if (micStream) { micStream.getTracks().forEach(function(t) { t.stop(); }); micStream = null; }
+  if (audioContext) { audioContext.close().catch(function(){}); audioContext = null; analyser = null; }
+  waveformDataArray = null;
+  var container = document.getElementById('waveform-container');
+  container.classList.remove('active', 'paused');
+}
+
+// ===== GRABACIÓN DE VOZ =====
+function toggleGrabacion(action) {
+  const state = window.appState;
+  if (action === 'start') {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      showToast('Su navegador no soporta reconocimiento de voz. Use Microsoft Edge.','error');
+      return;
+    }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    state.recognition = new SpeechRecognition();
+    state.recognition.continuous = true;
+    state.recognition.interimResults = true;
+    state.recognition.lang = 'es-419';
+    state.transcripcionActual = '';
+    const liveArea = document.getElementById('transcripcion-live');
+    liveArea.style.display = 'block';
+    liveArea.classList.add('recording');
+    liveArea.textContent = 'Escuchando...';
+    state.recognition.onresult = function(event) {
+      let interim = '', final = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) { final += event.results[i][0].transcript + ' '; }
+        else { interim += event.results[i][0].transcript; }
+      }
+      if (final) state.transcripcionActual += final;
+      liveArea.textContent = state.transcripcionActual + (interim ? '...' + interim : '');
+    };
+    state.recognition.onerror = function(e) { showToast('Error de micrófono: ' + e.error, 'error'); };
+    state.recognition.onend = function() { if (state.grabando) state.recognition.start(); };
+    state.recognition.start();
+    state.grabando = true;
+    startWaveform();
+    document.getElementById('rec-indicator').classList.add('active');
+    document.getElementById('rec-status').textContent = 'Grabando — ' + (state.modoHablante === 'paciente' ? 'Paciente' : 'Médico');
+    document.getElementById('btn-grabar').style.display = 'none';
+    document.getElementById('btn-pausar').style.display = '';
+    document.getElementById('btn-detener').style.display = '';
+  } else if (action === 'pause') {
+    if (state.recognition) state.recognition.stop();
+    state.grabando = false;
+    pauseWaveform();
+    document.getElementById('rec-indicator').classList.remove('active');
+    document.getElementById('rec-status').textContent = 'Pausado';
+    document.getElementById('btn-pausar').style.display = 'none';
+    document.getElementById('btn-reanudar').style.display = '';
+  } else if (action === 'resume') {
+    if (state.recognition) state.recognition.start();
+    state.grabando = true;
+    resumeWaveform();
+    document.getElementById('rec-indicator').classList.add('active');
+    document.getElementById('rec-status').textContent = 'Grabando';
+    document.getElementById('btn-reanudar').style.display = 'none';
+    document.getElementById('btn-pausar').style.display = '';
+  } else if (action === 'stop') {
+    if (state.recognition) { state.grabando = false; state.recognition.stop(); state.recognition = null; }
+    stopWaveform();
+    document.getElementById('rec-indicator').classList.remove('active');
+    document.getElementById('rec-status').textContent = '';
+    document.getElementById('btn-grabar').style.display = '';
+    document.getElementById('btn-pausar').style.display = 'none';
+    document.getElementById('btn-reanudar').style.display = 'none';
+    document.getElementById('btn-detener').style.display = 'none';
+    document.getElementById('transcripcion-live').classList.remove('recording');
+    if (state.transcripcionActual.trim()) {
+      const seccion = document.getElementById('seccion-destino').value;
+      if (state.modoHablante === 'paciente') {
+        traducirConIA(state.transcripcionActual.trim(), seccion);
+      } else {
+        const target = seccion === 'motivo_consulta' ? 'anamnesis-motivo' : 'anamnesis-enfermedad';
+        const el = document.getElementById(target);
+        el.value += (el.value ? '\n\n[Médico]: ' : '[Médico]: ') + state.transcripcionActual.trim();
+        showToast('Texto del médico agregado a ' + seccion.replace('_',' '));
+      }
+    }
+  }
+}
+
+function cambiarHablante(modo) {
+  window.appState.modoHablante = modo;
+  document.getElementById('spk-paciente').className = 'speaker-btn paciente' + (modo !== 'paciente' ? ' inactive' : '');
+  document.getElementById('spk-medico').className = 'speaker-btn medico' + (modo !== 'medico' ? ' inactive' : '');
+  if (window.appState.grabando) {
+    document.getElementById('rec-status').textContent = 'Grabando — ' + (modo === 'paciente' ? 'Paciente' : 'Médico');
+  }
+}
+
+// ===== GEMINI API =====
+function cleanJsonResponse(text) {
+  var cleaned = text.trim();
+  if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
+  else if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
+  if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
+  return cleaned.trim();
+}
+
+async function callGemini(systemPrompt, userMessage) {
+  if (GEMINI_API_KEY === 'TU_GEMINI_API_KEY') {
+    showToast('Gemini API no configurada. Obtenga su clave gratis en aistudio.google.com/apikey','warning');
+    return null;
+  }
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_API_KEY, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ parts: [{ text: userMessage }] }],
+        generationConfig: { maxOutputTokens: 2048 }
+      })
+    });
+    if (!res.ok) throw new Error('API error: ' + res.status);
+    const data = await res.json();
+    return cleanJsonResponse(data.candidates[0].content.parts[0].text);
+  } catch(e) { showToast('Error Gemini API: ' + e.message, 'error'); return null; }
+}
+
+async function traducirConIA(texto, seccion) {
+  showToast('Traduciendo a lenguaje médico con Gemini...','info');
+  const systemPrompt = `Eres un escriba médico clínico especializado en redacción de expedientes en español latinoamericano formal.`;
+  const userMsg = `TAREA: Traduce el siguiente relato del paciente a lenguaje médico clínico formal para la sección de ${seccion.replace('_',' ')}.
+
+RELATO ORIGINAL DEL PACIENTE:
+"${texto}"
+
+REGLAS ESTRICTAS:
+1. Usa terminología médica precisa (disnea, pirosis, palpitaciones, etc.)
+2. Mantén la cronología y secuencia del relato
+3. No agregues información que no esté en el relato
+4. No hagas diagnósticos
+5. Redacta en tercera persona (el paciente refiere...)
+6. Genera exactamente 3 versiones de redacción, de más breve a más detallada
+7. Responde SOLO en JSON: {"versiones":[{"id":1,"etiqueta":"Conciso","texto":"..."},{"id":2,"etiqueta":"Estándar","texto":"..."},{"id":3,"etiqueta":"Detallado","texto":"..."}],"terminos_detectados":["..."],"alertas":["..."]}`;
+
+  const result = await callGemini(systemPrompt, userMsg);
+  if (!result) {
+    // Fallback demo
+    mostrarVersiones({ versiones: [
+      { id:1, etiqueta:'Conciso', texto:'[Demo] Paciente refiere: ' + texto.substring(0,80) + '...' },
+      { id:2, etiqueta:'Estándar', texto:'[Demo] El/la paciente refiere ' + texto },
+      { id:3, etiqueta:'Detallado', texto:'[Demo] El/la paciente acude a consulta refiriendo ' + texto + '. Se registra el relato para valoración clínica.' }
+    ]}, seccion);
+    return;
+  }
+  try {
+    const parsed = JSON.parse(result);
+    mostrarVersiones(parsed, seccion);
+    if (parsed.alertas && parsed.alertas.length) {
+      const aiSug = document.getElementById('ai-sugerencias');
+      aiSug.innerHTML = parsed.alertas.map(a => '<div class="badge badge-yellow" style="margin:2px">⚠ ' + a + '</div>').join('');
+    }
+  } catch(e) { showToast('Error al procesar respuesta de IA','error'); }
+}
+
+function mostrarVersiones(data, seccion) {
+  const container = document.getElementById('versiones-container');
+  const wrapper = document.getElementById('versiones-ia');
+  wrapper.style.display = 'block';
+  wrapper._seccion = seccion;
+  wrapper._selectedVersion = 1;
+  container.innerHTML = data.versiones.map(v => `<div class="version-card ${v.id===1?'selected':''}" onclick="seleccionarVersion(${v.id})" data-vid="${v.id}">
+    <div class="v-label">${v.etiqueta}</div>
+    <div style="font-size:.85rem;color:var(--text-secondary)">${v.texto}</div>
+  </div>`).join('');
+  container._data = data.versiones;
+}
+
+function seleccionarVersion(id) {
+  document.querySelectorAll('.version-card').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.vid) === id));
+  document.getElementById('versiones-ia')._selectedVersion = id;
+}
+
+function confirmarVersion() {
+  const wrapper = document.getElementById('versiones-ia');
+  const seccion = wrapper._seccion;
+  const vid = wrapper._selectedVersion;
+  const container = document.getElementById('versiones-container');
+  const version = container._data.find(v => v.id === vid);
+  if (!version) return;
+  const target = seccion === 'motivo_consulta' ? 'anamnesis-motivo' : 'anamnesis-enfermedad';
+  const el = document.getElementById(target);
+  el.value += (el.value ? '\n\n' : '') + version.texto;
+  wrapper.style.display = 'none';
+  document.getElementById('transcripcion-live').style.display = 'none';
+  // Traceability
+  actualizarTrazabilidad(seccion, 'narrado_por_paciente');
+  showToast('Texto médico agregado a ' + seccion.replace('_',' '));
+}
+
+function editarManual() {
+  const wrapper = document.getElementById('versiones-ia');
+  const seccion = wrapper._seccion;
+  const target = seccion === 'motivo_consulta' ? 'anamnesis-motivo' : 'anamnesis-enfermedad';
+  const el = document.getElementById(target);
+  el.value += (el.value ? '\n\n' : '') + window.appState.transcripcionActual;
+  wrapper.style.display = 'none';
+  document.getElementById('transcripcion-live').style.display = 'none';
+  el.focus();
+  showToast('Texto original insertado para edición manual','info');
+}
+
+function actualizarTrazabilidad(seccion, etiqueta) {
+  const c = document.getElementById('ai-trazabilidad');
+  const badgeClass = { confirmado_por_audio:'badge-green', narrado_por_paciente:'badge-blue', indicado_por_medico:'badge-purple', requiere_revision:'badge-yellow', posible_inferencia:'badge-red', validado_por_medico:'badge-white' };
+  const icons = { confirmado_por_audio:'🟢', narrado_por_paciente:'🔵', indicado_por_medico:'🟣', requiere_revision:'🟡', posible_inferencia:'🔴', validado_por_medico:'⚪' };
+  const html = `<div style="margin-bottom:4px"><span class="badge ${badgeClass[etiqueta]||'badge-white'}">${icons[etiqueta]||''} ${etiqueta.replace(/_/g,' ')}</span> <span style="font-size:.75rem;color:var(--text-muted)">${seccion.replace(/_/g,' ')}</span></div>`;
+  if (c.textContent === 'Sin registros de trazabilidad.') c.innerHTML = '';
+  c.innerHTML += html;
+}
+
+// ===== EXAMEN FÍSICO =====
+const EXAM_SECTIONS = [
+  { id:'ef-general', label:'General', normal:'Paciente consciente, orientado en tiempo, espacio y persona. Buen estado general, afebril, hidratado, normocoloreado.' },
+  { id:'ef-cabeza', label:'Cabeza y cuello', normal:'Normocéfalo, sin adenopatías cervicales palpables. Orofaringe sin signos de inflamación. Tiroides no palpable.' },
+  { id:'ef-torax', label:'Tórax y cardiovascular', normal:'Tórax simétrico, normoexpansible. Murmullo vesicular conservado bilateral, sin ruidos agregados. Ruidos cardíacos rítmicos, normofonéticos, sin soplos.' },
+  { id:'ef-abdomen', label:'Abdomen', normal:'Abdomen blando, depresible, no doloroso a la palpación. Sin visceromegalias. Ruidos hidroaéreos presentes y normales.' },
+  { id:'ef-extremidades', label:'Extremidades', normal:'Extremidades simétricas, sin edemas. Pulsos periféricos presentes y simétricos. Llenado capilar menor a 2 segundos.' },
+  { id:'ef-neuro', label:'Neurológico', normal:'Glasgow 15/15. Pares craneales sin alteraciones. Fuerza muscular 5/5 en las 4 extremidades. Reflejos osteotendinosos normales. Sin signos meníngeos.' }
+];
+
+function initExamenFisico() {
+  const c = document.getElementById('examen-fisico-sections');
+  c.innerHTML = EXAM_SECTIONS.map(s => `<div class="form-group">
+    <div style="display:flex;justify-content:space-between;align-items:center"><label>${s.label}</label><button class="btn btn-sm btn-ghost" onclick="document.getElementById('${s.id}').value='${s.normal.replace(/'/g,"\\'")}';showToast('${s.label}: Normal','info')">✓ Normal</button></div>
+    <textarea class="textarea" id="${s.id}" placeholder="${s.label}..."></textarea>
+  </div>`).join('');
+}
+
+// ===== CIE-10 AUTOCOMPLETE =====
+function buscarCIE10(query) {
+  const list = document.getElementById('cie10-results');
+  if (query.length < 2) { list.classList.remove('show'); return; }
+  const q = query.toLowerCase();
+  const results = CIE10_DATA.filter(d => d.codigo.toLowerCase().includes(q) || d.nombre.toLowerCase().includes(q)).slice(0, 8);
+  if (!results.length) { list.innerHTML = '<div class="autocomplete-item" style="color:var(--text-muted)">Sin resultados</div>'; list.classList.add('show'); return; }
+  list.innerHTML = results.map((d,i) => `<div class="autocomplete-item" onclick="seleccionarCIE10(${i})"><span class="code">[${d.codigo}]</span> ${d.nombre}</div>`).join('');
+  list.classList.add('show');
+  list._data = results;
+}
+
+function seleccionarCIE10(idx) {
+  const list = document.getElementById('cie10-results');
+  const d = list._data[idx];
+  document.getElementById('dx-search').value = d.codigo + ' — ' + d.nombre;
+  document.getElementById('dx-search')._selected = d;
+  list.classList.remove('show');
+}
+
+function agregarDiagnostico() {
+  const input = document.getElementById('dx-search');
+  const sel = input._selected;
+  const tipo = document.getElementById('dx-tipo').value;
+  if (!sel && !input.value.trim()) { showToast('Seleccione un diagnóstico','warning'); return; }
+  const dx = sel ? { codigo_cie10: sel.codigo, nombre_diagnostico: sel.nombre, tipo, confirmado_por_medico: false }
+    : { codigo_cie10: '', nombre_diagnostico: input.value.trim(), tipo, confirmado_por_medico: false };
+  window.appState.diagnosticosActivos.push(dx);
+  renderDiagnosticos();
+  input.value = ''; input._selected = null;
+}
+
+function renderDiagnosticos() {
+  const c = document.getElementById('dx-list');
+  const dxs = window.appState.diagnosticosActivos;
+  c.innerHTML = dxs.map((d, i) => `<div class="dx-item">
+    <span class="dx-code">${d.codigo_cie10||'—'}</span>
+    <span class="dx-name">${d.nombre_diagnostico}</span>
+    <span class="dx-type dx-type-${d.tipo}">${d.tipo}</span>
+    <button class="btn btn-sm btn-icon btn-ghost" onclick="window.appState.diagnosticosActivos.splice(${i},1);renderDiagnosticos()">🗑</button>
+  </div>`).join('');
+}
+
+// ===== SUGERIR DIAGNÓSTICOS IA =====
+async function sugerirDiagnosticos() {
+  const mc = document.getElementById('anamnesis-motivo').value;
+  const ea = document.getElementById('anamnesis-enfermedad').value;
+  if (!mc && !ea) { showToast('Ingrese al menos el motivo de consulta o enfermedad actual','warning'); return; }
+  showToast('Consultando IA para diagnósticos...','info');
+  const sv = `PA:${document.getElementById('sv-pa').value||'N/R'}, FC:${document.getElementById('sv-fc').value||'N/R'}, FR:${document.getElementById('sv-fr').value||'N/R'}, T:${document.getElementById('sv-temp').value||'N/R'}°C, SatO2:${document.getElementById('sv-sat').value||'N/R'}%`;
+  const ef = EXAM_SECTIONS.map(s => s.label + ': ' + (document.getElementById(s.id).value || 'No evaluado')).join('; ');
+  const sysP = 'Eres un asistente clínico de apoyo diagnóstico. Basándote en los datos clínicos proporcionados, sugiere diagnósticos probables. NO confirmes diagnósticos.';
+  const userMsg = `DATOS CLÍNICOS:\nMotivo de consulta: ${mc}\nEnfermedad actual: ${ea}\nSignos vitales: ${sv}\nExamen físico: ${ef}\n\nResponde SOLO en JSON:\n{"sugerencias":[{"codigo_cie10":"...","nombre":"...","probabilidad":"alta|media|baja","justificacion":"...","estudios_sugeridos":["..."]}],"alertas_clinicas":["..."],"informacion_faltante":["..."]}`;
+  const result = await callGemini(sysP, userMsg);
+  if (!result) { showToast('IA no disponible. Configure GEMINI_API_KEY en aistudio.google.com/apikey','warning'); return; }
+  try {
+    const parsed = JSON.parse(result);
+    parsed.sugerencias.forEach(s => {
+      window.appState.diagnosticosActivos.push({ codigo_cie10: s.codigo_cie10, nombre_diagnostico: s.nombre + ' (' + s.probabilidad + ')', tipo: 'diferencial', confirmado_por_medico: false });
+    });
+    renderDiagnosticos();
+    actualizarTrazabilidad('diagnostico', 'posible_inferencia');
+    if (parsed.alertas_clinicas && parsed.alertas_clinicas.length) {
+      document.getElementById('ai-sugerencias').innerHTML = parsed.alertas_clinicas.map(a => '<div class="alert-banner alert-banner-warn" style="margin-bottom:4px">⚠ ' + a + '</div>').join('');
+    }
+    showToast('Diagnósticos sugeridos agregados. Revise y valide.','info');
+  } catch(e) { showToast('Error procesando respuesta','error'); }
+}
+
+// ===== ESTUDIOS =====
+function agregarEstudio() {
+  window.appState.estudios.push('');
+  renderEstudios();
+}
+
+function renderEstudios() {
+  const c = document.getElementById('estudios-list');
+  c.innerHTML = window.appState.estudios.map((e, i) => `<div style="display:flex;gap:6px;margin-bottom:6px">
+    <input class="input" value="${e}" placeholder="Estudio solicitado" onchange="window.appState.estudios[${i}]=this.value">
+    <button class="btn btn-sm btn-danger btn-icon" onclick="window.appState.estudios.splice(${i},1);renderEstudios()">🗑</button>
+  </div>`).join('');
+}
+
+// ===== RECETA =====
+function actualizarRecetaHeader() {
+  const m = window.appState.medico;
+  const p = window.appState.pacienteActivo;
+  if (m) {
+    document.getElementById('rx-medico').textContent = m.nombre_completo || '—';
+    document.getElementById('rx-especialidad').textContent = (m.especialidad || '') + ' / ' + (m.matricula || '');
+  }
+  document.getElementById('rx-fecha').textContent = new Date().toLocaleDateString('es-BO');
+  document.getElementById('rx-paciente').textContent = p ? p.nombre_completo + (document.getElementById('pac-edad').value ? ' — ' + document.getElementById('pac-edad').value : '') : '—';
+  const dxPrincipal = window.appState.diagnosticosActivos.find(d => d.tipo === 'principal');
+  document.getElementById('rx-diagnostico').textContent = dxPrincipal ? dxPrincipal.codigo_cie10 + ' — ' + dxPrincipal.nombre_diagnostico : '—';
+  const corr = (m && m.preferencias ? m.preferencias.ultimo_correlativo_receta || 0 : 0) + 1;
+  document.getElementById('rx-correlativo').value = corr;
+}
+
+function agregarMedicamento() {
+  window.appState.medicamentosReceta.push({ nombre_generico:'', presentacion:'', dosis:'', via:'oral', frecuencia:'', duracion:'', unidades:'', observaciones:'' });
+  renderMedicamentos();
+}
+
+function renderMedicamentos() {
+  const c = document.getElementById('medicamentos-list');
+  const meds = window.appState.medicamentosReceta;
+  c.innerHTML = meds.map((m, i) => `<div class="med-item">
+    <div class="med-header"><strong style="color:var(--accent-primary)">Medicamento #${i+1}</strong><button class="btn btn-sm btn-danger btn-icon" onclick="window.appState.medicamentosReceta.splice(${i},1);renderMedicamentos()">🗑</button></div>
+    <div class="autocomplete-wrap"><input class="input" value="${m.nombre_generico}" placeholder="Nombre genérico / comercial" onchange="window.appState.medicamentosReceta[${i}].nombre_generico=this.value" oninput="buscarMedFrecuente(this.value,${i})"><div class="autocomplete-list" id="med-ac-${i}"></div></div>
+    <div class="med-grid" style="margin-top:8px">
+      <div class="form-group"><label>Presentación</label><input class="input" value="${m.presentacion}" onchange="window.appState.medicamentosReceta[${i}].presentacion=this.value"></div>
+      <div class="form-group"><label>Dosis</label><input class="input" value="${m.dosis}" onchange="window.appState.medicamentosReceta[${i}].dosis=this.value"></div>
+      <div class="form-group"><label>Vía</label><select class="select" onchange="window.appState.medicamentosReceta[${i}].via=this.value">
+        <option value="oral" ${m.via==='oral'?'selected':''}>Oral</option><option value="IV" ${m.via==='IV'?'selected':''}>IV</option><option value="IM" ${m.via==='IM'?'selected':''}>IM</option><option value="SC" ${m.via==='SC'?'selected':''}>SC</option><option value="topica" ${m.via==='topica'?'selected':''}>Tópica</option><option value="inhalada" ${m.via==='inhalada'?'selected':''}>Inhalada</option>
+      </select></div>
+    </div>
+    <div class="med-grid" style="margin-top:6px">
+      <div class="form-group"><label>Frecuencia</label><input class="input" value="${m.frecuencia}" onchange="window.appState.medicamentosReceta[${i}].frecuencia=this.value" placeholder="c/8h"></div>
+      <div class="form-group"><label>Duración</label><input class="input" value="${m.duracion}" onchange="window.appState.medicamentosReceta[${i}].duracion=this.value" placeholder="7 días"></div>
+      <div class="form-group"><label>Unidades</label><input class="input" value="${m.unidades}" onchange="window.appState.medicamentosReceta[${i}].unidades=this.value" placeholder="21"></div>
+    </div>
+    <div class="form-group" style="margin-top:6px"><label>Observaciones</label><input class="input" value="${m.observaciones}" onchange="window.appState.medicamentosReceta[${i}].observaciones=this.value"></div>
+  </div>`).join('');
+}
+
+function buscarMedFrecuente(query, idx) {
+  const list = document.getElementById('med-ac-' + idx);
+  if (query.length < 2 || !window.appState.medicamentosFrecuentes.length) { list.classList.remove('show'); return; }
+  const q = query.toLowerCase();
+  const results = window.appState.medicamentosFrecuentes.filter(m => m.nombre_generico.toLowerCase().includes(q) || (m.nombre_comercial && m.nombre_comercial.toLowerCase().includes(q))).slice(0,5);
+  if (!results.length) { list.classList.remove('show'); return; }
+  list.innerHTML = results.map((m, ri) => `<div class="autocomplete-item" onclick="llenarMedFrecuente(${idx},${ri})">${m.nombre_generico} ${m.nombre_comercial?'('+m.nombre_comercial+')':''} — ${m.presentacion||''}</div>`).join('');
+  list.classList.add('show');
+  list._data = results;
+}
+
+function llenarMedFrecuente(medIdx, resIdx) {
+  const list = document.getElementById('med-ac-' + medIdx);
+  const m = list._data[resIdx];
+  Object.assign(window.appState.medicamentosReceta[medIdx], { nombre_generico: m.nombre_generico, presentacion: m.presentacion||'', dosis: m.dosis_usual||'', via: m.via||'oral', frecuencia: m.frecuencia||'', duracion: m.duracion_usual||'' });
+  renderMedicamentos();
+  list.classList.remove('show');
+}
+
+// ===== SUGERIR MEDICACIÓN IA =====
+async function sugerirMedicacion() {
+  const dxP = window.appState.diagnosticosActivos.find(d => d.tipo === 'principal');
+  if (!dxP) { showToast('Agregue al menos un diagnóstico principal','warning'); return; }
+  showToast('Consultando IA para medicación...','info');
+  const sysP = 'Eres un asistente de apoyo a la prescripción médica. Sugiere medicación habitual con dosis orientativas. El médico debe revisar y validar.';
+  const alergias = window.appState.alergiasActivas.map(a => a.sustancia).filter(Boolean).join(', ') || 'Ninguna conocida';
+  const medActual = window.appState.medicacionHabitual.map(m => m.nombre).filter(Boolean).join(', ') || 'Ninguna';
+  const userMsg = `DIAGNÓSTICO: ${dxP.nombre_diagnostico} (${dxP.codigo_cie10})\nALERGIAS: ${alergias}\nMEDICACIÓN ACTUAL: ${medActual}\n\nResponde SOLO en JSON:\n{"advertencias":["..."],"sugerencias":[{"nombre_generico":"...","presentacion":"...","dosis":"...","via":"...","frecuencia":"...","duracion":"...","observaciones":"..."}]}`;
+  const result = await callGemini(sysP, userMsg);
+  if (!result) return;
+  try {
+    const parsed = JSON.parse(result);
+    if (parsed.advertencias && parsed.advertencias.length) { parsed.advertencias.forEach(a => showToast('⚠ ' + a, 'warning', 6000)); }
+    parsed.sugerencias.forEach(s => { window.appState.medicamentosReceta.push({ ...s, unidades:'', observaciones: s.observaciones||'' }); });
+    renderMedicamentos();
+    actualizarTrazabilidad('receta', 'posible_inferencia');
+    showToast('Medicación sugerida agregada. Revise y valide.','info');
+  } catch(e) { showToast('Error procesando respuesta','error'); }
+}
+
+// ===== VALIDAR RECETA =====
+async function validarReceta() {
+  if (!window.appState.medicamentosReceta.length) { showToast('Agregue al menos un medicamento','warning'); return; }
+  showConfirm('Validar receta', '¿Confirma que ha revisado y valida esta receta como profesional responsable?', async function() {
+    if (supabaseClient && SUPABASE_URL !== 'TU_SUPABASE_URL') {
+      try {
+        const corr = parseInt(document.getElementById('rx-correlativo').value);
+        const recData = { episodio_id: window.appState.episodioActivo?.id, medico_id: window.appState.medico.id, paciente_id: window.appState.pacienteActivo?.id, numero_correlativo: corr, medicamentos: window.appState.medicamentosReceta, diagnostico_texto: document.getElementById('rx-diagnostico').textContent, estado:'emitida', validada_por_medico: true };
+        const { data, error } = await supabaseClient.from('recetas').insert(recData).select().single();
+        if (error) throw error;
+        await supabaseClient.from('medicos').update({ preferencias: { ...window.appState.medico.preferencias, ultimo_correlativo_receta: corr } }).eq('id', window.appState.medico.id);
+        window.appState.medico.preferencias.ultimo_correlativo_receta = corr;
+        registrarAuditoria('recetas', data.id, 'validar');
+      } catch(e) { showToast('Error: ' + e.message, 'error'); return; }
+    }
+    showToast('Receta validada y emitida correctamente');
+  });
+}
+
+// ===== NOTA SOAP =====
+async function generarNotaSOAP() {
+  const p = window.appState.pacienteActivo;
+  if (!p) { showToast('Seleccione un paciente primero','warning'); return; }
+  showToast('Generando nota SOAP...','info');
+  const mc = document.getElementById('anamnesis-motivo').value || 'No registrado';
+  const ea = document.getElementById('anamnesis-enfermedad').value || 'No registrado';
+  const ant = document.getElementById('pac-ant-personales')?.value || 'No registrados';
+  const alergias = window.appState.alergiasActivas.map(a => a.sustancia).filter(Boolean).join(', ') || 'Ninguna conocida';
+  const sv = `PA:${document.getElementById('sv-pa').value||'N/R'}, FC:${document.getElementById('sv-fc').value||'N/R'}, FR:${document.getElementById('sv-fr').value||'N/R'}, T:${document.getElementById('sv-temp').value||'N/R'}°C, SatO2:${document.getElementById('sv-sat').value||'N/R'}%, Peso:${document.getElementById('sv-peso').value||'N/R'}kg, Talla:${document.getElementById('sv-talla').value||'N/R'}cm, IMC:${document.getElementById('sv-imc').value||'N/R'}`;
+  const ef = EXAM_SECTIONS.map(s => s.label + ': ' + (document.getElementById(s.id).value || 'No evaluado')).join('\n');
+  const dxList = window.appState.diagnosticosActivos.map(d => d.codigo_cie10 + ' — ' + d.nombre_diagnostico + ' (' + d.tipo + ')').join(', ') || 'Pendiente';
+  const plan = (document.getElementById('plan-conducta').value || '') + '\n' + (document.getElementById('plan-derivaciones').value || '');
+  const edad = document.getElementById('pac-edad').value || '—';
+  const sexo = document.getElementById('pac-sexo').value || '—';
+
+  const sysP = 'Eres un escriba médico clínico. Genera una nota clínica en formato SOAP, español médico formal, usando estrictamente los datos proporcionados.';
+  const userMsg = `DATOS DEL EPISODIO:\nPaciente: ${p.nombre_completo}, ${edad}, ${sexo}\nMotivo de consulta: ${mc}\nEnfermedad actual: ${ea}\nAntecedentes: ${ant}\nAlergias: ${alergias}\nSignos vitales: ${sv}\nExamen físico:\n${ef}\nDiagnóstico: ${dxList}\nPlan: ${plan}\n\nGenera la nota SOAP. Al final agrega: "Nota generada con asistencia de IA — Requiere validación del profesional responsable."`;
+
+  const result = await callGemini(sysP, userMsg);
+  const nota = result || `NOTA CLÍNICA — FORMATO SOAP\n\n[S] SUBJETIVO\nPaciente ${p.nombre_completo}, ${edad}, ${sexo}.\nMotivo de consulta: ${mc}\nEnfermedad actual: ${ea}\n\n[O] OBJETIVO\nSignos vitales: ${sv}\nExamen físico:\n${ef}\n\n[A] VALORACIÓN\n${dxList}\n\n[P] PLAN\n${plan}\n\nNota generada con asistencia de IA — Requiere validación del profesional responsable.`;
+
+  window.appState.notaSOAP = nota;
+  document.getElementById('soap-content').textContent = nota;
+  showModal('soap-modal');
+}
+
+function copiarSOAP() {
+  navigator.clipboard.writeText(window.appState.notaSOAP).then(() => showToast('Nota copiada al portapapeles'));
+}
+
+async function validarNota() {
+  showConfirm('Validar nota', '¿Confirma que ha revisado y valida esta nota clínica como profesional responsable?', async function() {
+    if (supabaseClient && SUPABASE_URL !== 'TU_SUPABASE_URL') {
+      try {
+        const notaData = { episodio_id: window.appState.episodioActivo?.id, medico_id: window.appState.medico.id, tipo_nota: 'soap', contenido: { soap: window.appState.notaSOAP }, estado: 'validado', validado_en: new Date().toISOString(), validado_por: window.appState.medico.id };
+        const { data, error } = await supabaseClient.from('notas_clinicas').insert(notaData).select().single();
+        if (error) throw error;
+        registrarAuditoria('notas_clinicas', data.id, 'validar');
+      } catch(e) { showToast('Error: ' + e.message, 'error'); return; }
+    }
+    actualizarTrazabilidad('nota_soap', 'validado_por_medico');
+    closeModal('soap-modal');
+    showToast('Nota SOAP validada correctamente');
+  });
+}
+
+// ===== PDF EXPORT =====
+function exportarPDF() { generarNotaSOAP(); }
+
+async function exportarRecetaPDF() {
+  if (!window.appState.medicamentosReceta.length) { showToast('No hay medicamentos en la receta','warning'); return; }
+  generarPDFReceta();
+}
+
+function generarPDFReceta() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF('p', 'mm', 'a4');
+  const m = window.appState.medico;
+  const p = window.appState.pacienteActivo;
+  let y = 20;
+  doc.setFont('helvetica','bold'); doc.setFontSize(16);
+  doc.text('RECETA MÉDICA', 105, y, { align:'center' }); y += 10;
+  doc.setFontSize(10); doc.setFont('helvetica','normal');
+  doc.text('Dr(a). ' + (m?.nombre_completo||''), 105, y, { align:'center' }); y += 5;
+  doc.text((m?.especialidad||'') + ' — Mat. ' + (m?.matricula||''), 105, y, { align:'center' }); y += 10;
+  doc.line(20, y, 190, y); y += 8;
+  doc.text('Paciente: ' + (p?.nombre_completo||'—'), 20, y); y += 5;
+  doc.text('Fecha: ' + new Date().toLocaleDateString('es-BO') + '   N° ' + document.getElementById('rx-correlativo').value, 20, y); y += 5;
+  doc.text('Diagnóstico: ' + document.getElementById('rx-diagnostico').textContent, 20, y); y += 10;
+  doc.line(20, y, 190, y); y += 8;
+  doc.setFont('helvetica','bold'); doc.text('PRESCRIPCIÓN:', 20, y); y += 8;
+  doc.setFont('helvetica','normal');
+  window.appState.medicamentosReceta.forEach((med, i) => {
+    if (y > 260) { doc.addPage(); y = 20; }
+    doc.text((i+1)+'. '+med.nombre_generico+' — '+med.presentacion, 20, y); y += 5;
+    doc.text('   Dosis: '+med.dosis+' | Vía: '+med.via+' | Frecuencia: '+med.frecuencia+' | Duración: '+med.duracion, 25, y); y += 5;
+    if (med.observaciones) { doc.text('   Obs: '+med.observaciones, 25, y); y += 5; }
+    y += 3;
+  });
+  y += 10;
+  doc.line(60, y, 150, y); y += 5;
+  doc.text('Dr(a). ' + (m?.nombre_completo||''), 105, y, { align:'center' }); y += 5;
+  doc.text((m?.matricula||''), 105, y, { align:'center' }); y += 10;
+  doc.setFontSize(7);
+  doc.text('Documento generado con asistencia de IA. Validado por el profesional responsable.', 105, y, { align:'center' });
+  doc.save('receta_' + (p?.nombre_completo||'paciente').replace(/\s/g,'_') + '.pdf');
+  showToast('PDF de receta generado');
+  registrarAuditoria('recetas', null, 'exportar');
+}
+
+function imprimirReceta() {
+  const m = window.appState.medico;
+  const p = window.appState.pacienteActivo;
+  const area = document.getElementById('print-area');
+  let medsHtml = window.appState.medicamentosReceta.map((med,i) => `<tr><td>${i+1}</td><td><strong>${med.nombre_generico}</strong><br>${med.presentacion}</td><td>${med.dosis}</td><td>${med.via}</td><td>${med.frecuencia}</td><td>${med.duracion}</td><td>${med.observaciones||''}</td></tr>`).join('');
+  area.innerHTML = `<div style="font-family:Arial,sans-serif;color:#000;max-width:700px;margin:auto;padding:20px">
+    <div class="print-header"><h2 style="margin:0">RECETA MÉDICA</h2><p>Dr(a). ${m?.nombre_completo||''} — ${m?.especialidad||''} — Mat. ${m?.matricula||''}</p></div>
+    <p><strong>Paciente:</strong> ${p?.nombre_completo||''} | <strong>Fecha:</strong> ${new Date().toLocaleDateString('es-BO')} | <strong>N°:</strong> ${document.getElementById('rx-correlativo').value}</p>
+    <p><strong>Diagnóstico:</strong> ${document.getElementById('rx-diagnostico').textContent}</p>
+    <table border="1" cellpadding="4" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:11px"><tr><th>#</th><th>Medicamento</th><th>Dosis</th><th>Vía</th><th>Frecuencia</th><th>Duración</th><th>Obs</th></tr>${medsHtml}</table>
+    <div class="print-footer"><p>Dr(a). ${m?.nombre_completo||''}<br>${m?.matricula||''}</p><p style="font-size:8px">Documento generado con asistencia de IA. Validado por el profesional responsable.</p></div></div>`;
+  window.print();
+  registrarAuditoria('recetas', null, 'imprimir');
+}
+
+// ===== RESUMEN PARA PACIENTE =====
+async function generarResumenPaciente() {
+  const p = window.appState.pacienteActivo;
+  if (!p) { showToast('Seleccione un paciente','warning'); return; }
+  const dxList = window.appState.diagnosticosActivos.filter(d=>d.tipo==='principal').map(d=>d.nombre_diagnostico).join(', ') || 'Pendiente';
+  const resumen = `Estimado(a) ${p.nombre_completo},\n\nSu diagnóstico: ${dxList}\n\nMedicación indicada:\n${window.appState.medicamentosReceta.map((m,i)=>(i+1)+'. '+m.nombre_generico+' '+m.dosis+' '+m.via+' '+m.frecuencia+' por '+m.duracion).join('\n')||'Ninguna'}\n\nIndicaciones:\n${document.getElementById('plan-conducta')?.value||'Seguir indicaciones médicas.'}\n\nAnte cualquier eventualidad, acudir a urgencias.\n\n— ${window.appState.medico?.nombre_completo||'Su médico'}`;
+  document.getElementById('soap-content').textContent = resumen;
+  window.appState.notaSOAP = resumen;
+  showModal('soap-modal');
+}
+
+// ===== CAMPOS INCOMPLETOS =====
+function revisarCamposIncompletos() {
+  const faltantes = [];
+  if (!window.appState.pacienteActivo) faltantes.push('No hay paciente seleccionado');
+  if (!window.appState.episodioActivo) faltantes.push('No hay episodio/consulta activa');
+  if (!document.getElementById('anamnesis-motivo').value) faltantes.push('Motivo de consulta vacío');
+  if (!document.getElementById('sv-pa').value) faltantes.push('Presión arterial no registrada');
+  if (!window.appState.diagnosticosActivos.length) faltantes.push('Sin diagnósticos registrados');
+  const aiSug = document.getElementById('ai-sugerencias');
+  if (faltantes.length) {
+    aiSug.innerHTML = faltantes.map(f => '<div style="margin-bottom:4px;font-size:.8rem;color:var(--accent-warn)">⚠ ' + f + '</div>').join('');
+    showToast(faltantes.length + ' campos incompletos detectados','warning');
+  } else {
+    aiSug.innerHTML = '<div style="font-size:.8rem;color:var(--accent-primary)">✓ Todos los campos principales están completos</div>';
+    showToast('Todos los campos principales están completos','success');
+  }
+}
+
+// ===== PERFIL =====
+function showPerfilModal() {
+  const m = window.appState.medico;
+  document.getElementById('perfil-nombre').value = m?.nombre_completo || '';
+  document.getElementById('perfil-especialidad').value = m?.especialidad || '';
+  document.getElementById('perfil-matricula').value = m?.matricula || '';
+  document.getElementById('perfil-sello').value = m?.sello_texto || '';
+  showModal('perfil-modal');
+}
+
+async function guardarPerfil() {
+  const nombre = document.getElementById('perfil-nombre').value.trim();
+  const esp = document.getElementById('perfil-especialidad').value.trim();
+  const mat = document.getElementById('perfil-matricula').value.trim();
+  const sello = document.getElementById('perfil-sello').value.trim();
+  if (!nombre) { showToast('El nombre es obligatorio','warning'); return; }
+  if (supabaseClient && SUPABASE_URL !== 'TU_SUPABASE_URL') {
+    try {
+      const { error } = await supabaseClient.from('medicos').update({ nombre_completo: nombre, especialidad: esp, matricula: mat, sello_texto: sello }).eq('id', window.appState.medico.id);
+      if (error) throw error;
+    } catch(e) { showToast('Error: ' + e.message, 'error'); return; }
+  }
+  window.appState.medico = { ...window.appState.medico, nombre_completo: nombre, especialidad: esp, matricula: mat, sello_texto: sello };
+  document.getElementById('topbar-medico').textContent = nombre;
+  closeModal('perfil-modal');
+  showToast('Perfil actualizado');
+}
+
+// ===== AUDITORÍA =====
+async function registrarAuditoria(tabla, registroId, accion) {
+  if (!supabaseClient || SUPABASE_URL === 'TU_SUPABASE_URL') return;
+  try {
+    await supabaseClient.from('auditoria').insert({ medico_id: window.appState.medico.id, tabla_afectada: tabla, registro_id: registroId, accion: accion });
+  } catch(e) { console.warn('Audit error:', e); }
+}
+
+// ===== CLOSE DROPDOWNS ON CLICK OUTSIDE =====
+document.addEventListener('click', function(e) {
+  document.querySelectorAll('.autocomplete-list.show').forEach(list => {
+    if (!list.parentElement.contains(e.target)) list.classList.remove('show');
+  });
+});
+
+// ===== MOBILE NAVIGATION =====
+function toggleSidebar() {
+  var sidebar = document.getElementById('main-sidebar');
+  var overlay = document.getElementById('sidebar-overlay');
+  sidebar.classList.toggle('open');
+  overlay.classList.toggle('show');
+}
+
+function toggleAIPanel() {
+  var panel = document.querySelector('.ai-panel');
+  var overlay = document.getElementById('ai-overlay');
+  panel.classList.toggle('open');
+  overlay.classList.toggle('show');
+}
+
+// Close sidebar on nav click (mobile)
+document.querySelectorAll('.sidebar-item').forEach(function(item) {
+  item.addEventListener('click', function() {
+    if (window.innerWidth <= 900) {
+      var sidebar = document.getElementById('main-sidebar');
+      var overlay = document.getElementById('sidebar-overlay');
+      sidebar.classList.remove('open');
+      overlay.classList.remove('show');
+    }
+  });
+});
+
+// ===== INDEXEDDB PERSISTENCE (DictaDB) =====
+var DictaDB = {
+  dbName: 'DictaAI_v1',
+  dbVersion: 1,
+  db: null,
+
+  open: function() {
+    return new Promise(function(resolve, reject) {
+      if (DictaDB.db) { resolve(DictaDB.db); return; }
+      var req = indexedDB.open(DictaDB.dbName, DictaDB.dbVersion);
+      req.onupgradeneeded = function(e) {
+        var db = e.target.result;
+        if (!db.objectStoreNames.contains('perfil')) db.createObjectStore('perfil', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('pacientes')) db.createObjectStore('pacientes', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('consultas')) db.createObjectStore('consultas', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('config')) db.createObjectStore('config', { keyPath: 'key' });
+      };
+      req.onsuccess = function(e) { DictaDB.db = e.target.result; resolve(DictaDB.db); };
+      req.onerror = function(e) { console.warn('IndexedDB error:', e); reject(e); };
+    });
+  },
+
+  put: function(storeName, data) {
+    return DictaDB.open().then(function(db) {
+      return new Promise(function(resolve, reject) {
+        var tx = db.transaction(storeName, 'readwrite');
+        tx.objectStore(storeName).put(data);
+        tx.oncomplete = function() { resolve(); };
+        tx.onerror = function(e) { reject(e); };
+      });
+    });
+  },
+
+  get: function(storeName, key) {
+    return DictaDB.open().then(function(db) {
+      return new Promise(function(resolve, reject) {
+        var tx = db.transaction(storeName, 'readonly');
+        var req = tx.objectStore(storeName).get(key);
+        req.onsuccess = function() { resolve(req.result || null); };
+        req.onerror = function(e) { reject(e); };
+      });
+    });
+  },
+
+  getAll: function(storeName) {
+    return DictaDB.open().then(function(db) {
+      return new Promise(function(resolve, reject) {
+        var tx = db.transaction(storeName, 'readonly');
+        var req = tx.objectStore(storeName).getAll();
+        req.onsuccess = function() { resolve(req.result || []); };
+        req.onerror = function(e) { reject(e); };
+      });
+    });
+  },
+
+  delete: function(storeName, key) {
+    return DictaDB.open().then(function(db) {
+      return new Promise(function(resolve, reject) {
+        var tx = db.transaction(storeName, 'readwrite');
+        tx.objectStore(storeName).delete(key);
+        tx.oncomplete = function() { resolve(); };
+        tx.onerror = function(e) { reject(e); };
+      });
+    });
+  }
+};
+
+// --- Auto-save doctor profile ---
+function autoSavePerfil() {
+  var m = window.appState.medico;
+  if (!m) return;
+  DictaDB.put('perfil', { id: 'current_medico', data: m }).catch(function(e) { console.warn('save perfil:', e); });
+}
+
+// --- Auto-save patient data ---
+function autoSavePaciente() {
+  var p = window.appState.pacienteActivo;
+  if (!p || !p.id) return;
+  var pacData = {
+    id: p.id,
+    nombre_completo: document.getElementById('pac-nombre').value,
+    fecha_nacimiento: document.getElementById('pac-fechanac').value,
+    sexo: document.getElementById('pac-sexo').value,
+    documento_identidad: document.getElementById('pac-ci').value,
+    telefono: document.getElementById('pac-telefono').value,
+    direccion: document.getElementById('pac-direccion').value,
+    contacto_emergencia: {
+      nombre: document.getElementById('pac-emerg-nombre').value,
+      telefono: document.getElementById('pac-emerg-tel').value,
+      parentesco: document.getElementById('pac-emerg-parentesco').value
+    },
+    antecedentes: {
+      personales: document.getElementById('pac-ant-personales').value,
+      patologicos: document.getElementById('pac-ant-patologicos').value
+    },
+    alergias: window.appState.alergiasActivas,
+    medicacion_habitual: window.appState.medicacionHabitual,
+    savedAt: new Date().toISOString()
+  };
+  DictaDB.put('pacientes', pacData).catch(function(e) { console.warn('save pac:', e); });
+}
+
+// --- Auto-save consultation draft ---
+function autoSaveConsulta() {
+  var ep = window.appState.episodioActivo;
+  if (!ep || !ep.id) return;
+  var draft = {
+    id: ep.id,
+    codigo: ep.codigo,
+    paciente_id: window.appState.pacienteActivo ? window.appState.pacienteActivo.id : null,
+    anamnesis: {
+      motivo: document.getElementById('anamnesis-motivo').value,
+      enfermedad: document.getElementById('anamnesis-enfermedad').value,
+      ant_personales: document.getElementById('anamnesis-ant-personales').value,
+      ant_patologicos: document.getElementById('anamnesis-ant-patologicos').value,
+      medicacion: document.getElementById('anamnesis-medicacion').value
+    },
+    signos_vitales: {
+      pa: document.getElementById('sv-pa').value,
+      fc: document.getElementById('sv-fc').value,
+      fr: document.getElementById('sv-fr').value,
+      temp: document.getElementById('sv-temp').value,
+      sat: document.getElementById('sv-sat').value,
+      gluc: document.getElementById('sv-gluc').value,
+      peso: document.getElementById('sv-peso').value,
+      talla: document.getElementById('sv-talla').value,
+      imc: document.getElementById('sv-imc').value
+    },
+    examen_fisico: {},
+    diagnosticos: window.appState.diagnosticosActivos,
+    medicamentos_receta: window.appState.medicamentosReceta,
+    estudios: window.appState.estudios,
+    plan_conducta: document.getElementById('plan-conducta').value,
+    plan_derivaciones: document.getElementById('plan-derivaciones').value,
+    savedAt: new Date().toISOString()
+  };
+  // Save exam sections
+  EXAM_SECTIONS.forEach(function(s) {
+    var el = document.getElementById(s.id);
+    if (el) draft.examen_fisico[s.id] = el.value;
+  });
+  DictaDB.put('consultas', draft).catch(function(e) { console.warn('save consulta:', e); });
+}
+
+// --- Save active session state ---
+function autoSaveSession() {
+  DictaDB.put('config', {
+    key: 'session',
+    dashboardActual: window.appState.dashboardActual,
+    pacienteId: window.appState.pacienteActivo ? window.appState.pacienteActivo.id : null,
+    episodioId: window.appState.episodioActivo ? window.appState.episodioActivo.id : null,
+    savedAt: new Date().toISOString()
+  }).catch(function(e) { console.warn('save session:', e); });
+}
+
+// --- Comprehensive auto-save (debounced) ---
+var _autoSaveTimer = null;
+function scheduleAutoSave() {
+  if (_autoSaveTimer) clearTimeout(_autoSaveTimer);
+  _autoSaveTimer = setTimeout(function() {
+    autoSavePerfil();
+    autoSavePaciente();
+    autoSaveConsulta();
+    autoSaveSession();
+    updateSaveIndicator('saved');
+  }, 1500);
+  updateSaveIndicator('saving');
+}
+
+function updateSaveIndicator(status) {
+  var ind = document.getElementById('save-indicator');
+  if (!ind) return;
+  if (status === 'saving') {
+    ind.textContent = '⏳ Guardando...';
+    ind.style.color = 'var(--accent-warn)';
+  } else {
+    ind.textContent = '✓ Guardado';
+    ind.style.color = 'var(--accent-primary)';
+    setTimeout(function() { if (ind.textContent === '✓ Guardado') { ind.style.opacity = '0.5'; } }, 2000);
+  }
+  ind.style.opacity = '1';
+}
+
+// --- Restore saved state on load ---
+async function restoreFromIndexedDB() {
+  try {
+    await DictaDB.open();
+    // Restore doctor profile
+    var perfil = await DictaDB.get('perfil', 'current_medico');
+    if (perfil && perfil.data) {
+      window.appState.medico = perfil.data;
+    }
+    // Restore session
+    var session = await DictaDB.get('config', 'session');
+    if (session && session.pacienteId) {
+      var pac = await DictaDB.get('pacientes', session.pacienteId);
+      if (pac) {
+        window.appState.pacienteActivo = pac;
+        // Fill patient form
+        document.getElementById('pac-nombre').value = pac.nombre_completo || '';
+        document.getElementById('pac-fechanac').value = pac.fecha_nacimiento || '';
+        calcularEdad();
+        document.getElementById('pac-sexo').value = pac.sexo || '';
+        document.getElementById('pac-ci').value = pac.documento_identidad || '';
+        document.getElementById('pac-telefono').value = pac.telefono || '';
+        document.getElementById('pac-direccion').value = pac.direccion || '';
+        if (pac.contacto_emergencia) {
+          document.getElementById('pac-emerg-nombre').value = pac.contacto_emergencia.nombre || '';
+          document.getElementById('pac-emerg-tel').value = pac.contacto_emergencia.telefono || '';
+          document.getElementById('pac-emerg-parentesco').value = pac.contacto_emergencia.parentesco || '';
+        }
+        if (pac.antecedentes) {
+          document.getElementById('pac-ant-personales').value = pac.antecedentes.personales || '';
+          document.getElementById('pac-ant-patologicos').value = pac.antecedentes.patologicos || '';
+        }
+        window.appState.alergiasActivas = pac.alergias || [];
+        window.appState.medicacionHabitual = pac.medicacion_habitual || [];
+        renderAlergias();
+        renderMedicacionHabitual();
+        actualizarSidebarPaciente();
+      }
+    }
+    // Restore consultation
+    if (session && session.episodioId) {
+      var consulta = await DictaDB.get('consultas', session.episodioId);
+      if (consulta) {
+        window.appState.episodioActivo = { id: consulta.id, codigo: consulta.codigo };
+        actualizarSidebarPaciente();
+        // Restore anamnesis
+        if (consulta.anamnesis) {
+          document.getElementById('anamnesis-motivo').value = consulta.anamnesis.motivo || '';
+          document.getElementById('anamnesis-enfermedad').value = consulta.anamnesis.enfermedad || '';
+          document.getElementById('anamnesis-ant-personales').value = consulta.anamnesis.ant_personales || '';
+          document.getElementById('anamnesis-ant-patologicos').value = consulta.anamnesis.ant_patologicos || '';
+          document.getElementById('anamnesis-medicacion').value = consulta.anamnesis.medicacion || '';
+        }
+        // Restore vitals
+        if (consulta.signos_vitales) {
+          var sv = consulta.signos_vitales;
+          document.getElementById('sv-pa').value = sv.pa || '';
+          document.getElementById('sv-fc').value = sv.fc || '';
+          document.getElementById('sv-fr').value = sv.fr || '';
+          document.getElementById('sv-temp').value = sv.temp || '';
+          document.getElementById('sv-sat').value = sv.sat || '';
+          document.getElementById('sv-gluc').value = sv.gluc || '';
+          document.getElementById('sv-peso').value = sv.peso || '';
+          document.getElementById('sv-talla').value = sv.talla || '';
+          document.getElementById('sv-imc').value = sv.imc || '';
+        }
+        // Restore exam
+        if (consulta.examen_fisico) {
+          EXAM_SECTIONS.forEach(function(s) {
+            var el = document.getElementById(s.id);
+            if (el && consulta.examen_fisico[s.id]) el.value = consulta.examen_fisico[s.id];
+          });
+        }
+        // Restore diagnostics, meds, studies
+        window.appState.diagnosticosActivos = consulta.diagnosticos || [];
+        window.appState.medicamentosReceta = consulta.medicamentos_receta || [];
+        window.appState.estudios = consulta.estudios || [];
+        renderDiagnosticos();
+        renderMedicamentos();
+        renderEstudios();
+        if (consulta.plan_conducta) document.getElementById('plan-conducta').value = consulta.plan_conducta;
+        if (consulta.plan_derivaciones) document.getElementById('plan-derivaciones').value = consulta.plan_derivaciones;
+      }
+    }
+    // Restore active dashboard
+    if (session && session.dashboardActual) {
+      switchDashboard(session.dashboardActual);
+    }
+    if (perfil) showToast('Sesión anterior restaurada', 'info');
+  } catch(e) { console.warn('IndexedDB restore:', e); }
+}
+
+// --- Attach auto-save to input changes ---
+function attachAutoSaveListeners() {
+  document.querySelectorAll('.input, .textarea, .select').forEach(function(el) {
+    el.addEventListener('input', scheduleAutoSave);
+    el.addEventListener('change', scheduleAutoSave);
+  });
+}
+
+// ===== INIT ON LOAD =====
+window.addEventListener('DOMContentLoaded', function() {
+  checkSession();
+  // Init IndexedDB and attach listeners after a short delay
+  setTimeout(function() {
+    attachAutoSaveListeners();
+  }, 500);
+});
+
+// Override initApp to also restore from IndexedDB
+var _origInitApp = initApp;
+initApp = function() {
+  _origInitApp();
+  // After the app is initialized, restore saved data
+  restoreFromIndexedDB().then(function() {
+    attachAutoSaveListeners();
+    actualizarRecetaHeader();
+  });
+};
+
+</script>
+</body>
+</html>
