@@ -1270,25 +1270,42 @@ function cleanJsonResponse(text) {
   return cleaned.trim();
 }
 
-async function callGemini(systemPrompt, userMessage) {
+async function callGemini(systemPrompt, userMessage, maxRetries) {
+  if (maxRetries === undefined) maxRetries = 3;
   if (GEMINI_API_KEY === 'TU_GEMINI_API_KEY') {
     showToast('Gemini API no configurada. Obtenga su clave gratis en aistudio.google.com/apikey','warning');
     return null;
   }
-  try {
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_API_KEY, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ parts: [{ text: userMessage }] }],
-        generationConfig: { maxOutputTokens: 2048 }
-      })
-    });
-    if (!res.ok) throw new Error('API error: ' + res.status);
-    const data = await res.json();
-    return cleanJsonResponse(data.candidates[0].content.parts[0].text);
-  } catch(e) { showToast('Error Gemini API: ' + e.message, 'error'); return null; }
+  var attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      var res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=' + GEMINI_API_KEY, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ parts: [{ text: userMessage }] }],
+          generationConfig: { maxOutputTokens: 2048 }
+        })
+      });
+      if (res.status === 429) {
+        attempt++;
+        var waitSec = Math.pow(2, attempt);
+        showToast('Límite de API alcanzado. Reintentando en ' + waitSec + 's... (' + attempt + '/' + maxRetries + ')','warning');
+        await new Promise(function(r){ setTimeout(r, waitSec * 1000); });
+        continue;
+      }
+      if (!res.ok) throw new Error('API error: ' + res.status);
+      var data = await res.json();
+      return cleanJsonResponse(data.candidates[0].content.parts[0].text);
+    } catch(e) {
+      if (attempt >= maxRetries - 1) { showToast('Error Gemini API: ' + e.message, 'error'); return null; }
+      attempt++;
+      await new Promise(function(r){ setTimeout(r, 2000); });
+    }
+  }
+  showToast('No se pudo conectar con Gemini después de ' + maxRetries + ' intentos','error');
+  return null;
 }
 
 async function traducirConIA(texto, seccion) {

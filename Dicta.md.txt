@@ -1,0 +1,758 @@
+# DICTA AI — PROMPT DE CONSTRUCCIÓN FASE 1 (v1.0)
+
+---
+
+## CONTRATO TÉCNICO PREVIO (NO NEGOCIABLE)
+
+Antes de escribir una sola línea de código, internaliza estas decisiones ya tomadas:
+
+| Capa | Tecnología | Restricciones |
+|------|-----------|---------------|
+| Frontend | HTML5 + CSS3 + JS vanilla | Un solo archivo .html sin build step |
+| Base de datos / Auth | Supabase JS SDK v2 (CDN) | Ver schema completo en sección 3 |
+| IA | Claude API `claude-sonnet-4-20250514` | Solo desde JS, sin proxy |
+| Speech | Web Speech API nativa del navegador | Sin diarización real → toggle manual |
+| PDF | jsPDF + html2canvas (CDN) | |
+| CIE-10 | JSON incrustado en el HTML | 80 diagnósticos frecuentes mínimo |
+| Compatibilidad | Microsoft Edge como browser principal | |
+
+**Stack prohibido:** React, Vue, Angular, Node.js, npm, build tools, módulos ES6 con import/export, frameworks CSS externos (Bootstrap, Tailwind).
+
+---
+
+## 1. IDENTIDAD DEL PRODUCTO
+
+**Nombre:** Dicta AI — Expediente Clínico Inteligente  
+**Versión:** 1.0 MVP  
+**Idioma:** Español latinoamericano médico formal. Cero inglés en la UI.  
+**Público:** Médicos generales y especialistas en Bolivia/Latinoamérica  
+**Filosofía:** La IA es copiloto cognitivo y documental. Nunca decisor autónomo. El médico siempre valida antes de guardar, exportar o imprimir.
+
+---
+
+## 2. DISEÑO VISUAL OBLIGATORIO
+
+### Estética: Japandi Oscuro Médico Premium
+
+El diseño debe sentirse como un instrumento de precisión clínica de alto nivel. No una app genérica. No Material Design. No Bootstrap.
+
+**Paleta de colores (CSS variables):**
+```css
+--bg-base:        #0a0c0f;   /* negro carbón profundo */
+--bg-surface:     #111318;   /* superficie de paneles */
+--bg-card:        #161a21;   /* tarjetas */
+--bg-elevated:    #1c2029;   /* paneles elevados */
+--border-subtle:  #232830;   /* bordes sutiles */
+--border-active:  #2e3540;   /* bordes activos */
+--accent-primary: #00d4aa;   /* verde-teal médico vibrante */
+--accent-hover:   #00f0c0;   /* hover del accent */
+--accent-danger:  #ff4d6d;   /* alertas críticas */
+--accent-warn:    #ffb347;   /* advertencias */
+--accent-info:    #4da6ff;   /* información */
+--text-primary:   #e8eaf0;   /* texto principal */
+--text-secondary: #8892a0;   /* texto secundario */
+--text-muted:     #4a5260;   /* texto apagado */
+--glow-primary:   rgba(0, 212, 170, 0.15);
+--glow-danger:    rgba(255, 77, 109, 0.15);
+```
+
+**Tipografía:**
+```html
+<!-- Cargar desde Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+```
+- Cuerpo y UI: `DM Sans`
+- Monoespaciado (códigos, CIE-10, logs): `JetBrains Mono`
+- Títulos de sección destacados: `Playfair Display`
+
+**Componentes visuales obligatorios:**
+- Botones 3D con `box-shadow` multicapa y efecto press (`translateY(1px)` on active)
+- Tarjetas con `backdrop-filter: blur(12px)` y borde `1px solid var(--border-subtle)`
+- Inputs con glow `box-shadow: 0 0 0 2px var(--glow-primary)` al focus
+- Scrollbar personalizado estilo thin oscuro
+- Sidebar con separadores visuales entre grupos de navegación
+- Animaciones de entrada con `opacity` + `translateY` suaves (200-300ms)
+- Indicador de grabación: pulso animado en rojo con `@keyframes pulse-record`
+- Toggle Médico/Paciente: switch visual grande y llamativo, color diferenciado
+
+**Layout principal:**
+```
+┌─────────────────────────────────────────────────────┐
+│  TOPBAR: Logo + Paciente activo + Médico + Sesión   │
+├──────────┬──────────────────────────┬───────────────┤
+│          │                          │               │
+│ SIDEBAR  │   PANEL CENTRAL          │  PANEL IA     │
+│ 220px    │   (área principal)       │  280px        │
+│          │                          │               │
+│ Nav por  │   Contenido del          │  Sugerencias  │
+│ dashboard│   dashboard activo       │  Trazabilidad │
+│          │                          │  Acciones     │
+└──────────┴──────────────────────────┴───────────────┘
+```
+
+---
+
+## 3. SCHEMA SUPABASE (implementar exactamente)
+
+Ejecutar este SQL en Supabase antes de conectar la app:
+
+```sql
+-- Tabla de médicos (extiende auth.users)
+create table medicos (
+  id              uuid primary key references auth.users(id) on delete cascade,
+  nombre_completo text not null,
+  especialidad    text,
+  matricula       text,
+  firma_base64    text,
+  sello_texto     text,
+  preferencias    jsonb default '{
+    "estilo_nota": "detallado",
+    "formato_impresion": "A4",
+    "ultimo_correlativo_receta": 0,
+    "plantilla_favorita": "soap",
+    "tono_redaccion": "formal"
+  }'::jsonb,
+  created_at      timestamptz default now(),
+  updated_at      timestamptz default now()
+);
+
+-- Tabla de pacientes
+create table pacientes (
+  id                   uuid primary key default gen_random_uuid(),
+  medico_id            uuid references medicos(id) on delete cascade,
+  nombre_completo      text not null,
+  fecha_nacimiento     date,
+  sexo                 text check (sexo in ('masculino','femenino','otro')),
+  documento_identidad  text,
+  telefono             text,
+  direccion            text,
+  contacto_emergencia  jsonb default '{}'::jsonb,
+  alergias             jsonb default '[]'::jsonb,
+  medicacion_habitual  jsonb default '[]'::jsonb,
+  antecedentes         jsonb default '{}'::jsonb,
+  created_at           timestamptz default now(),
+  updated_at           timestamptz default now()
+);
+
+-- Tabla de episodios
+create table episodios (
+  id              uuid primary key default gen_random_uuid(),
+  codigo          text unique,
+  paciente_id     uuid references pacientes(id),
+  medico_id       uuid references medicos(id),
+  tipo_atencion   text check (tipo_atencion in (
+                    'consulta_externa','hospitalizacion',
+                    'urgencias','terapia_intensiva')),
+  fecha_atencion  date not null default current_date,
+  hora_atencion   time,
+  servicio        text,
+  cama            text,
+  estado          text default 'borrador' check (estado in (
+                    'borrador','en_revision','validado','cerrado')),
+  created_at      timestamptz default now(),
+  updated_at      timestamptz default now()
+);
+
+-- Tabla de notas clínicas
+create table notas_clinicas (
+  id              uuid primary key default gen_random_uuid(),
+  episodio_id     uuid references episodios(id),
+  medico_id       uuid references medicos(id),
+  tipo_nota       text check (tipo_nota in (
+                    'soap','evolucion','ingreso','consulta_externa',
+                    'emergencia','interconsulta','alta','uti',
+                    'por_problemas','epicrisis')),
+  contenido       jsonb not null default '{}'::jsonb,
+  version         integer default 1,
+  estado          text default 'borrador' check (estado in (
+                    'borrador','validado','cerrado')),
+  validado_en     timestamptz,
+  validado_por    uuid references medicos(id),
+  created_at      timestamptz default now(),
+  updated_at      timestamptz default now()
+);
+
+-- Tabla de transcripciones
+create table transcripciones (
+  id                     uuid primary key default gen_random_uuid(),
+  nota_id                uuid references notas_clinicas(id),
+  seccion                text,
+  texto_original         text,
+  hablante               text check (hablante in ('paciente','medico','mixto')),
+  texto_medico_formal    text,
+  version_elegida        integer default 1,
+  versiones_ia           jsonb default '[]'::jsonb,
+  etiquetas_trazabilidad jsonb default '[]'::jsonb,
+  created_at             timestamptz default now()
+);
+
+-- Tabla de diagnósticos
+create table diagnosticos (
+  id                    uuid primary key default gen_random_uuid(),
+  nota_id               uuid references notas_clinicas(id),
+  codigo_cie10          text,
+  nombre_diagnostico    text not null,
+  tipo                  text check (tipo in ('principal','diferencial','descartado')),
+  confirmado_por_medico boolean default false,
+  created_at            timestamptz default now()
+);
+
+-- Tabla de recetas
+create table recetas (
+  id                   uuid primary key default gen_random_uuid(),
+  episodio_id          uuid references episodios(id),
+  medico_id            uuid references medicos(id),
+  paciente_id          uuid references pacientes(id),
+  numero_correlativo   integer,
+  medicamentos         jsonb default '[]'::jsonb,
+  diagnostico_texto    text,
+  formato_impresion    text default 'A4',
+  estado               text default 'borrador' check (estado in ('borrador','emitida')),
+  validada_por_medico  boolean default false,
+  created_at           timestamptz default now(),
+  updated_at           timestamptz default now()
+);
+
+-- Tabla de medicamentos frecuentes (memoria predictiva)
+create table medicamentos_frecuentes (
+  id               uuid primary key default gen_random_uuid(),
+  medico_id        uuid references medicos(id) on delete cascade,
+  nombre_generico  text not null,
+  nombre_comercial text,
+  presentacion     text,
+  dosis_usual      text,
+  via              text,
+  frecuencia       text,
+  duracion_usual   text,
+  observaciones    text,
+  veces_usado      integer default 1,
+  ultima_vez       timestamptz default now(),
+  created_at       timestamptz default now()
+);
+
+-- Tabla de auditoría
+create table auditoria (
+  id               uuid primary key default gen_random_uuid(),
+  medico_id        uuid references medicos(id),
+  tabla_afectada   text,
+  registro_id      uuid,
+  accion           text check (accion in (
+                     'crear','editar','validar',
+                     'imprimir','exportar','ver','cerrar')),
+  datos_anteriores jsonb,
+  datos_nuevos     jsonb,
+  created_at       timestamptz default now()
+);
+
+-- RLS: cada médico solo ve sus datos
+alter table medicos              enable row level security;
+alter table pacientes            enable row level security;
+alter table episodios            enable row level security;
+alter table notas_clinicas       enable row level security;
+alter table transcripciones      enable row level security;
+alter table diagnosticos         enable row level security;
+alter table recetas              enable row level security;
+alter table medicamentos_frecuentes enable row level security;
+alter table auditoria            enable row level security;
+
+create policy "acceso_propio" on medicos
+  for all using (id = auth.uid());
+create policy "acceso_propio" on pacientes
+  for all using (medico_id = auth.uid());
+create policy "acceso_propio" on episodios
+  for all using (medico_id = auth.uid());
+create policy "acceso_propio" on notas_clinicas
+  for all using (medico_id = auth.uid());
+create policy "acceso_propio" on recetas
+  for all using (medico_id = auth.uid());
+create policy "acceso_propio" on medicamentos_frecuentes
+  for all using (medico_id = auth.uid());
+create policy "acceso_propio" on auditoria
+  for all using (medico_id = auth.uid());
+-- transcripciones y diagnósticos heredan por join con notas_clinicas
+```
+
+---
+
+## 4. SISTEMA DE AUTENTICACIÓN
+
+### Variables de entorno (hardcodeadas en el HTML para uso local)
+```javascript
+const SUPABASE_URL = 'TU_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'TU_SUPABASE_ANON_KEY';
+const CLAUDE_API_KEY = 'TU_CLAUDE_API_KEY';
+```
+
+### Pantalla de Login (antes del dashboard principal)
+- Campo: correo electrónico
+- Campo: contraseña (con toggle mostrar/ocultar)
+- Botón: Iniciar sesión
+- Enlace: Crear cuenta nueva (abre modal de registro)
+- Modal de registro: nombre completo, especialidad, matrícula, correo, contraseña
+- Al registrarse: crear fila en `medicos` con `id = auth.uid()`
+- Sesión persistente: usar `supabase.auth.getSession()` al cargar la app
+- Al iniciar sesión: cargar `medicos` row del usuario y guardarlo en `window.appState.medico`
+- Cerrar sesión: `supabase.auth.signOut()` + limpiar estado + volver a login
+
+---
+
+## 5. ESTADO GLOBAL DE LA APLICACIÓN
+
+```javascript
+window.appState = {
+  medico: null,          // objeto médico completo de Supabase
+  pacienteActivo: null,  // objeto paciente activo
+  episodioActivo: null,  // objeto episodio activo
+  notaActiva: null,      // objeto nota clínica activa
+  dashboardActual: 'paciente',  // 'paciente' | 'anamnesis' | 'examen' | 'receta'
+  modoHablante: 'paciente',    // 'paciente' | 'medico'
+  grabando: false,
+  recognition: null,     // instancia Web Speech API
+  transcripcionActual: '',
+  transcripcionesGuardadas: {},  // { seccion: { original, formal, hablante } }
+  cie10: [],             // array CIE-10 cargado al inicio
+  medicamentosFrecuentes: []
+};
+```
+
+---
+
+## 6. ESTRUCTURA DE NAVEGACIÓN
+
+### Sidebar (izquierda, 220px)
+
+```
+┌─────────────────────┐
+│  ⚕ DICTA AI         │
+│  v1.0               │
+├─────────────────────┤
+│  PACIENTE ACTIVO    │
+│  [Nombre paciente]  │
+│  [Episodio código]  │
+├─────────────────────┤
+│  DASHBOARDS         │
+│  ○ Datos Paciente   │
+│  ○ Anamnesis        │
+│  ○ Examen y Dx      │
+│  ○ Receta           │
+├─────────────────────┤
+│  ACCIONES           │
+│  ○ Nueva consulta   │
+│  ○ Generar nota     │
+│  ○ Exportar PDF     │
+├─────────────────────┤
+│  CONFIGURACIÓN      │
+│  ○ Mi perfil        │
+│  ○ Cerrar sesión    │
+└─────────────────────┘
+```
+
+---
+
+## 7. DASHBOARD 1 — DATOS DEL PACIENTE
+
+### Campos obligatorios (formulario en tarjetas organizadas):
+**Tarjeta: Identificación**
+- Nombre completo (texto)
+- Fecha de nacimiento (date) → calcular edad automáticamente
+- Sexo (select: masculino / femenino / otro)
+- Documento de identidad (texto)
+- Teléfono (texto)
+- Dirección (textarea corto)
+
+**Tarjeta: Contacto de emergencia**
+- Nombre, teléfono, parentesco
+
+**Tarjeta: Antecedentes clínicos**
+- Antecedentes personales (textarea)
+- Antecedentes patológicos (textarea)
+- Medicación habitual (lista dinámica: agregar/eliminar filas)
+
+**Tarjeta: Alergias** ← CRÍTICA
+- Lista dinámica de alergias: sustancia + tipo (medicamento/alimento/ambiental/otro) + confirmada (sí/no)
+- Alerta visual si hay alergias no confirmadas: banner amarillo `⚠ Verificar antecedente alérgico antes de emitir receta`
+- Alerta roja si hay alergias confirmadas a medicamentos frecuentes de la receta activa
+
+### Comportamiento:
+- Botón "Buscar paciente existente" (busca en tabla `pacientes` por nombre o CI)
+- Botón "Nuevo paciente" (limpia el formulario)
+- Botón "Guardar paciente" (upsert en Supabase)
+- Botón "Nueva consulta" (crea episodio nuevo, genera código EP-YYYY-NNNNN)
+- Al guardar, registrar en tabla `auditoria`
+
+---
+
+## 8. DASHBOARD 2 — ANAMNESIS
+
+### Secciones (tarjetas expandibles/colapsables):
+1. Motivo de consulta
+2. Enfermedad actual
+3. Antecedentes personales
+4. Antecedentes patológicos relevantes
+5. Medicación habitual
+6. Alergias (referencia cruzada con dashboard 1)
+
+### BARRA DE CONTROLES DE GRABACIÓN (fija en header de secciones 1 y 2)
+
+```
+[● GRABAR] [⏸ PAUSAR] [▶ REANUDAR] [⏹ DETENER] [✎ EDITAR] [✦ REGENERAR IA]
+```
+
+**Toggle de hablante (grande, prominente):**
+```
+[ 👤 PACIENTE ]  ←→  [ 👨‍⚕️ MÉDICO ]
+```
+- Color verde cuando está en modo PACIENTE
+- Color azul cuando está en modo MÉDICO
+- Solo el texto del modo PACIENTE se envía a traducción clínica
+- El texto del modo MÉDICO se guarda como contexto pero NO contamina la narración clínica
+
+### FLUJO COMPLETO DE GRABACIÓN:
+1. Médico presiona GRABAR → se activa Web Speech API (`SpeechRecognition`)
+2. El texto transcrito aparece en tiempo real en un área de texto con fondo oscuro diferenciado
+3. Al presionar DETENER:
+   a. Se guarda `texto_original` con etiqueta del hablante
+   b. Si hablante = 'paciente': se envía automáticamente a Claude API para traducción
+   c. Claude devuelve 3 versiones de redacción médica formal
+   d. Se muestran las 3 versiones en tarjetas seleccionables (radio button visual)
+   e. Médico elige la versión o edita manualmente
+   f. Al confirmar: se guarda en `transcripciones` con etiquetas de trazabilidad
+
+### PROMPT PARA CLAUDE (traducción coloquial → médico formal):
+```
+Eres un escriba médico clínico especializado en redacción de expedientes en español latinoamericano formal.
+
+TAREA: Traduce el siguiente relato del paciente a lenguaje médico clínico formal para la sección de {SECCION}.
+
+RELATO ORIGINAL DEL PACIENTE:
+"{TEXTO_ORIGINAL}"
+
+REGLAS ESTRICTAS:
+1. Usa terminología médica precisa (disnea, pirosis, palpitaciones, etc.)
+2. Mantén la cronología y secuencia del relato
+3. No agregues información que no esté en el relato
+4. No hagas diagnósticos
+5. Redacta en tercera persona (el paciente refiere...)
+6. Genera exactamente 3 versiones de redacción, de más breve a más detallada
+7. Responde SOLO en JSON con esta estructura:
+{
+  "versiones": [
+    { "id": 1, "etiqueta": "Conciso", "texto": "..." },
+    { "id": 2, "etiqueta": "Estándar", "texto": "..." },
+    { "id": 3, "etiqueta": "Detallado", "texto": "..." }
+  ],
+  "terminos_detectados": ["disnea", "..."],
+  "alertas": ["posible alergia mencionada: ..."] // solo si aplica
+}
+
+EJEMPLOS DE TRADUCCIÓN:
+- "me falta el aire" → "disnea de esfuerzo"
+- "me arde el pecho" → "pirosis / dolor urente retroesternal"
+- "me late rápido" → "palpitaciones"
+- "me duele la cabeza" → "cefalea"
+- "estoy muy cansado" → "astenia marcada"
+- "me duele al orinar" → "disuria"
+```
+
+### Etiquetas de trazabilidad (mostrar como badges de color):
+- 🟢 `confirmado_por_audio`
+- 🔵 `narrado_por_paciente`
+- 🟣 `indicado_por_medico`
+- 🟡 `requiere_revision`
+- 🔴 `posible_inferencia`
+- ⚪ `validado_por_medico`
+
+---
+
+## 9. DASHBOARD 3 — EXAMEN FÍSICO Y DIAGNÓSTICO
+
+### Tarjeta: Signos vitales
+- Presión arterial (ej: 120/80 mmHg)
+- Frecuencia cardíaca (lpm)
+- Frecuencia respiratoria (rpm)
+- Temperatura (°C)
+- Saturación O₂ (%)
+- Peso (kg), Talla (cm) → IMC calculado automáticamente
+- Glucemia (mg/dL, opcional)
+
+### Tarjeta: Examen físico
+- General (textarea)
+- Cabeza y cuello
+- Tórax y cardiovascular
+- Abdomen
+- Extremidades
+- Neurológico
+- Botón rápido: "✓ Normal" por cada sección → rellena con texto predefinido clínicamente apropiado
+
+### Tarjeta: Diagnóstico con autocompletado CIE-10
+**Implementación del autocompletado:**
+```javascript
+// CIE-10 incrustado como array en el HTML (mínimo 80 entradas frecuentes)
+const CIE10_DATA = [
+  { codigo: "A09", nombre: "Diarrea y gastroenteritis de presunto origen infeccioso" },
+  { codigo: "B34.9", nombre: "Infección viral no especificada" },
+  { codigo: "E11", nombre: "Diabetes mellitus tipo 2" },
+  { codigo: "E14", nombre: "Diabetes mellitus no especificada" },
+  { codigo: "G43", nombre: "Migraña" },
+  { codigo: "I10", nombre: "Hipertensión esencial (primaria)" },
+  { codigo: "I20", nombre: "Angina de pecho" },
+  { codigo: "J00", nombre: "Rinofaringitis aguda (resfriado común)" },
+  { codigo: "J06.9", nombre: "Infección aguda de las vías respiratorias superiores" },
+  { codigo: "J18", nombre: "Neumonía no especificada" },
+  { codigo: "J45", nombre: "Asma" },
+  { codigo: "K21", nombre: "Enfermedad por reflujo gastroesofágico" },
+  { codigo: "K29", nombre: "Gastritis y duodenitis" },
+  { codigo: "K35", nombre: "Apendicitis aguda" },
+  { codigo: "K92.1", nombre: "Melena" },
+  { codigo: "L50", nombre: "Urticaria" },
+  { codigo: "M54.5", nombre: "Lumbago no especificado" },
+  { codigo: "N39.0", nombre: "Infección de vías urinarias" },
+  { codigo: "R05", nombre: "Tos" },
+  { codigo: "R06.0", nombre: "Disnea" },
+  { codigo: "R50", nombre: "Fiebre de causa desconocida" },
+  { codigo: "R51", nombre: "Cefalea" },
+  { codigo: "Z30", nombre: "Anticoncepción" }
+  // ... continuar hasta >= 80 entradas relevantes para medicina general
+];
+```
+
+**Comportamiento del autocompletado:**
+- Input de texto libre
+- Al escribir ≥ 2 caracteres, filtrar por nombre O código (case-insensitive)
+- Mostrar dropdown con máximo 8 resultados
+- Cada resultado muestra: `[código] Nombre diagnóstico`
+- Al seleccionar: llenar campos de código y nombre
+- Permite múltiples diagnósticos (principal + diferenciales)
+- Cada diagnóstico tiene tag: Principal / Diferencial / Descartado
+
+### Tarjeta: Sugerencia IA de diagnósticos
+- Botón: "✦ Sugerir diagnósticos posibles"
+- Envía a Claude: anamnesis + signos vitales + hallazgos físicos
+- Claude devuelve lista de diagnósticos posibles con código CIE-10 y justificación
+- Se muestran como sugerencias NO confirmadas con badge `posible_inferencia`
+- Médico puede aceptar, modificar o descartar cada sugerencia
+
+### PROMPT PARA CLAUDE (sugerencia diagnóstica):
+```
+Eres un asistente clínico de apoyo diagnóstico. Basándote en los datos clínicos proporcionados, sugiere diagnósticos probables en orden de probabilidad. NO confirmes diagnósticos. Solo sugiere para que el médico evalúe.
+
+DATOS CLÍNICOS:
+Motivo de consulta: {MC}
+Enfermedad actual: {EA}
+Signos vitales: {SV}
+Examen físico: {EF}
+
+Responde SOLO en JSON:
+{
+  "sugerencias": [
+    {
+      "codigo_cie10": "...",
+      "nombre": "...",
+      "probabilidad": "alta|media|baja",
+      "justificacion": "...",
+      "estudios_sugeridos": ["..."]
+    }
+  ],
+  "alertas_clinicas": ["..."],
+  "informacion_faltante": ["..."]
+}
+```
+
+### Tarjeta: Plan diagnóstico y conducta
+- Estudios solicitados (lista dinámica)
+- Conducta (textarea)
+- Derivaciones (texto)
+
+---
+
+## 10. DASHBOARD 4 — RECETA MÉDICA INTELIGENTE
+
+### Encabezado de la receta (datos no editables en pantalla, sí en impresión):
+- Nombre del médico (del perfil)
+- Especialidad y matrícula
+- Fecha actual
+- Nombre del paciente y edad (del dashboard 1)
+- Número correlativo (del campo `preferencias.ultimo_correlativo_receta + 1`)
+- Diagnóstico (del dashboard 3)
+
+### Área de prescripción (lista dinámica de medicamentos):
+
+**Por cada medicamento:**
+```
+[Nombre genérico / comercial] ← autocompletado desde medicamentos_frecuentes
+[Presentación]  [Dosis]  [Vía: oral/IV/IM/SC/tópica/inhalada]
+[Frecuencia]  [Duración]  [Unidades a dispensar]
+[Observaciones]
+[🗑 Eliminar]
+```
+
+**Autocompletado predictivo:**
+- Al escribir en "Nombre genérico": buscar en `medicamentos_frecuentes` del médico
+- Si hay coincidencia: prellenar todos los campos con los valores guardados
+- Al guardar la receta: actualizar `veces_usado` y `ultima_vez` en `medicamentos_frecuentes`
+- Si es medicamento nuevo: agregarlo a `medicamentos_frecuentes`
+
+### Botones de acción:
+- `+ Agregar medicamento`
+- `📋 Reutilizar receta anterior` (dropdown con últimas 5 recetas)
+- `✦ Sugerir medicación` (Claude sugiere según diagnóstico activo)
+- `✓ Validar y emitir receta` (cambia estado a 'emitida', bloquea edición)
+- `🖨 Imprimir receta`
+- `📄 Exportar PDF`
+
+### PROMPT PARA CLAUDE (sugerencia de medicación):
+```
+Eres un asistente de apoyo a la prescripción médica. Sugiere medicación habitual para el siguiente diagnóstico, con dosis orientativas. El médico debe revisar y validar toda prescripción antes de emitirla.
+
+DIAGNÓSTICO: {DIAGNOSTICO}
+ALERGIAS DEL PACIENTE: {ALERGIAS}
+MEDICACIÓN ACTUAL: {MEDICACION_HABITUAL}
+
+Responde SOLO en JSON:
+{
+  "advertencias": ["..."],
+  "sugerencias": [
+    {
+      "nombre_generico": "...",
+      "presentacion": "...",
+      "dosis": "...",
+      "via": "...",
+      "frecuencia": "...",
+      "duracion": "...",
+      "observaciones": "..."
+    }
+  ]
+}
+```
+
+### MÓDULO DE IMPRESIÓN FLEXIBLE:
+
+**Formatos disponibles:** A4 | A5 | Carta | Media carta | Compacto
+
+**Lógica de correlativo:**
+```javascript
+// Al abrir el módulo de impresión:
+const correlativo = appState.medico.preferencias.ultimo_correlativo_receta + 1;
+// Mostrar en campo editable antes de imprimir
+// Al confirmar impresión: actualizar preferencias en Supabase
+await supabase.from('medicos').update({
+  preferencias: { ...prefs, ultimo_correlativo_receta: correlativo }
+}).eq('id', appState.medico.id);
+```
+
+**Vista previa de impresión (CSS @media print):**
+- Fondo blanco, texto negro
+- Membrete del médico en header
+- Logo/sello visual en footer
+- Firma digital simulada (texto estilizado del nombre)
+- Advertencia: "Documento generado con asistencia de IA. Validado por el profesional responsable."
+
+---
+
+## 11. PANEL DERECHO — IA Y TRAZABILIDAD (280px)
+
+Este panel auxiliar debe mostrar contextualmente:
+
+**Sección: Sugerencias activas**
+- Lista de advertencias pendientes (alergias, campos faltantes, etc.)
+- Alertas clínicas generadas por Claude
+- Información faltante detectada
+
+**Sección: Trazabilidad**
+- Por cada sección con grabación: mostrar badges de etiqueta
+- Indicar si fue audio del paciente, del médico, o editado manualmente
+
+**Sección: Acciones rápidas**
+- `✦ Generar nota SOAP completa`
+- `📋 Resumen para el paciente`
+- `✦ Sugerir diagnósticos`
+- `✦ Sugerir medicación`
+- `⚠ Revisar campos incompletos`
+
+### GENERACIÓN DE NOTA SOAP (acción principal):
+**Botón prominente:** `✦ GENERAR NOTA SOAP`
+
+**Prompt para Claude:**
+```
+Eres un escriba médico clínico. Genera una nota clínica estructurada en formato SOAP, en español médico formal, usando estrictamente los datos proporcionados. No inventes información.
+
+DATOS DEL EPISODIO:
+Paciente: {NOMBRE}, {EDAD} años, {SEXO}
+Motivo de consulta: {MC}
+Enfermedad actual: {EA}
+Antecedentes: {ANT}
+Alergias: {ALERGIAS}
+Signos vitales: {SV}
+Examen físico: {EF}
+Diagnóstico: {DX} ({CIE10})
+Plan: {PLAN}
+
+Genera la nota en formato SOAP con estas secciones exactas:
+S (Subjetivo): relato del paciente en tercera persona, lenguaje médico formal
+O (Objetivo): signos vitales y hallazgos del examen físico
+A (Valoración): impresión diagnóstica con código CIE-10
+P (Plan): conducta, prescripciones, derivaciones, indicaciones
+
+Responde SOLO con el texto de la nota, sin JSON, en español médico formal.
+Al final agrega: "Nota generada con asistencia de IA — Requiere validación del profesional responsable."
+```
+
+---
+
+## 12. ADVERTENCIAS DE SEGURIDAD CLÍNICA (obligatorias)
+
+### Mensaje fijo en topbar:
+```
+⚕ DICTA AI es un asistente documental. Toda información requiere validación médica profesional antes de ser utilizada clínicamente.
+```
+
+### Bloqueo de guardado final:
+- La nota clínica y la receta NO pueden cambiar de estado 'borrador' a 'validado' sin que el médico presione explícitamente el botón de validación
+- Modal de confirmación: `¿Confirma que ha revisado y valida esta nota/receta como profesional responsable?`
+- Al validar: registrar `validado_en`, `validado_por` y entrada en `auditoria`
+
+---
+
+## 13. GESTIÓN DE ERRORES Y ESTADOS DE CARGA
+
+- Todo llamado a Supabase: mostrar spinner sutil + mensaje de carga
+- Error de conexión: toast rojo con mensaje claro
+- Error de Claude API: toast amarillo + mantener texto anterior
+- Web Speech no disponible: mostrar mensaje con instrucciones para activar micrófono
+- Sin sesión activa: redirigir a login automáticamente
+
+---
+
+## 14. RESTRICCIONES FINALES DE IMPLEMENTACIÓN
+
+1. **Un solo archivo .html** — todo CSS, JS y HTML en un único archivo
+2. **Sin npm, sin build** — funciona abriéndolo directamente en Edge
+3. **Supabase JS v2 via CDN:** `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2`
+4. **jsPDF via CDN:** `https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js`
+5. **Todo en español** — cero inglés visible en la UI
+6. **Diseño Japandi oscuro** — sin Bootstrap, sin Tailwind, CSS propio completo
+7. **No usar `alert()` ni `confirm()` nativos** — usar modales propios con el diseño del sistema
+8. **Persistencia real en Supabase** — no mockups de datos, todo conectado
+9. **Claude API llamada directamente desde JS** — endpoint: `https://api.anthropic.com/v1/messages`
+10. **La IA nunca diagnostica ni prescribe de forma autónoma** — siempre requiere validación
+
+---
+
+## 15. ENTREGABLE ESPERADO
+
+Un único archivo `dicta_ai_v1.html` que al abrirse en Microsoft Edge:
+1. Muestre la pantalla de login
+2. Permita crear cuenta y que el médico complete su perfil
+3. Muestre el dashboard completo con los 4 paneles funcionales
+4. Permita grabar voz, transcribir y traducir a lenguaje médico
+5. Permita buscar/crear pacientes persistidos en Supabase
+6. Genere notas SOAP con Claude API
+7. Permita crear y emitir recetas con autocompletado predictivo
+8. Exporte PDF de la nota y la receta
+9. Registre todas las acciones en la tabla de auditoría
+10. Mantenga la sesión entre cierres del navegador
+
+---
+
+*Dicta AI v1.0 — Expediente Clínico Inteligente para médicos latinoamericanos*
+*Diseñado para documentar mejor, más rápido y con mayor seguridad clínica.*
