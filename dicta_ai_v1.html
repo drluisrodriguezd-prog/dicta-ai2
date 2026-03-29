@@ -1328,7 +1328,7 @@ async function callGemini(systemPrompt, userMessage, maxRetries) {
         body: JSON.stringify({
           system_instruction: { parts: [{ text: systemPrompt }] },
           contents: [{ parts: [{ text: userMessage }] }],
-          generationConfig: { maxOutputTokens: 2048 }
+          generationConfig: { maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 1024 } }
         })
       });
       if (res.status === 429) {
@@ -1340,7 +1340,11 @@ async function callGemini(systemPrompt, userMessage, maxRetries) {
       }
       if (!res.ok) throw new Error('API error: ' + res.status);
       var data = await res.json();
-      return cleanJsonResponse(data.candidates[0].content.parts[0].text);
+      var parts = data.candidates[0].content.parts;
+      var textPart = '';
+      for (var i = parts.length - 1; i >= 0; i--) { if (parts[i].text && !parts[i].thought) { textPart = parts[i].text; break; } }
+      if (!textPart && parts.length > 0) textPart = parts[parts.length - 1].text || '';
+      return cleanJsonResponse(textPart);
     } catch(e) {
       if (attempt >= maxRetries - 1) { showToast('Error Gemini API: ' + e.message, 'error'); return null; }
       attempt++;
