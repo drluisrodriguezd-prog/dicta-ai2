@@ -362,13 +362,19 @@ body{background:#fff!important;color:#000!important;font-size:11pt}
 <div class="sidebar-section"><div class="sidebar-section-title">Configuración</div></div>
 <div class="sidebar-item" onclick="toggleApiKeyPanel()">🔑 Configurar IA <span id="api-key-status" style="font-size:.65rem;margin-left:4px"></span></div>
 <div id="api-key-panel" style="display:none;padding:8px 12px;background:var(--bg-secondary);border-radius:8px;margin:4px 8px">
-  <label style="font-size:.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em">API Key de Gemini</label>
-  <input class="input" id="input-api-key" type="password" placeholder="AIzaSy..." style="font-size:.8rem;margin:6px 0">
+  <label style="font-size:.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em">Proveedor de IA</label>
+  <select class="select" id="ai-provider" style="font-size:.8rem;margin:6px 0;width:100%" onchange="updateProviderLinks()">
+    <option value="gemini">Google Gemini</option>
+    <option value="groq">Groq (Llama 3 - Rápido)</option>
+    <option value="openai">OpenAI (ChatGPT)</option>
+  </select>
+  <label style="font-size:.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em">API Key</label>
+  <input class="input" id="input-api-key" type="password" placeholder="Ingresa tu API Key..." style="font-size:.8rem;margin:6px 0">
   <div style="display:flex;gap:6px;margin-bottom:6px">
     <button class="btn btn-sm btn-primary" onclick="guardarApiKey()" style="flex:1;font-size:.75rem">💾 Guardar</button>
     <button class="btn btn-sm btn-ghost" onclick="borrarApiKey()" style="font-size:.75rem">🗑️</button>
   </div>
-  <a href="https://aistudio.google.com/apikey" target="_blank" style="font-size:.7rem;color:var(--accent);text-decoration:underline">🔗 Obtener clave gratis en Google AI Studio</a>
+  <a id="provider-link" href="https://aistudio.google.com/apikey" target="_blank" style="font-size:.7rem;color:var(--accent);text-decoration:underline">🔗 Obtener clave gratis aquí</a>
 </div>
 <div class="sidebar-item" onclick="showPerfilModal()">👤 Mi perfil</div>
 <div class="sidebar-item" onclick="handleLogout()">🚪 Cerrar sesión</div>
@@ -614,35 +620,56 @@ body{background:#fff!important;color:#000!important;font-size:11pt}
 // ===== CONFIGURACIÓN =====
 const SUPABASE_URL = 'TU_SUPABASE_URL';
 const SUPABASE_ANON_KEY = 'TU_SUPABASE_ANON_KEY';
-var GEMINI_API_KEY = localStorage.getItem('dicta_gemini_api_key') || '';
-function getGeminiApiKey() { return localStorage.getItem('dicta_gemini_api_key') || ''; }
+var AI_KEY = localStorage.getItem('dicta_ai_apikey') || localStorage.getItem('dicta_gemini_api_key') || '';
+var AI_PROVIDER = localStorage.getItem('dicta_ai_provider') || 'gemini';
+
+function getApiKey() { return localStorage.getItem('dicta_ai_apikey') || ''; }
+
 function toggleApiKeyPanel() {
   var p = document.getElementById('api-key-panel');
   p.style.display = p.style.display === 'none' ? 'block' : 'none';
-  document.getElementById('input-api-key').value = getGeminiApiKey();
+  document.getElementById('ai-provider').value = AI_PROVIDER;
+  document.getElementById('input-api-key').value = getApiKey();
+  updateProviderLinks();
 }
+
+function updateProviderLinks() {
+  var p = document.getElementById('ai-provider').value;
+  var link = document.getElementById('provider-link');
+  if (p === 'gemini') { link.href = 'https://aistudio.google.com/apikey'; link.textContent = '🔗 Obtener clave de Gemini gratis'; }
+  else if (p === 'groq') { link.href = 'https://console.groq.com/keys'; link.textContent = '🔗 Obtener clave de Groq gratis'; }
+  else if (p === 'openai') { link.href = 'https://platform.openai.com/api-keys'; link.textContent = '🔗 Obtener clave de OpenAI'; }
+}
+
 function guardarApiKey() {
   var key = document.getElementById('input-api-key').value.trim();
+  var prov = document.getElementById('ai-provider').value;
   if (!key) { showToast('Ingresa una API key válida','warning'); return; }
-  localStorage.setItem('dicta_gemini_api_key', key);
-  GEMINI_API_KEY = key;
+  
+  localStorage.setItem('dicta_ai_apikey', key);
+  localStorage.setItem('dicta_ai_provider', prov);
+  AI_KEY = key;
+  AI_PROVIDER = prov;
+  
   updateApiKeyStatus();
   document.getElementById('api-key-panel').style.display = 'none';
-  showToast('✅ API Key de Gemini guardada correctamente','success');
+  showToast('✅ API Key guardada correctamente (' + prov + ')','success');
 }
+
 function borrarApiKey() {
-  localStorage.removeItem('dicta_gemini_api_key');
-  GEMINI_API_KEY = '';
+  localStorage.removeItem('dicta_ai_apikey');
+  AI_KEY = '';
   document.getElementById('input-api-key').value = '';
   updateApiKeyStatus();
   showToast('API Key eliminada','info');
 }
+
 function updateApiKeyStatus() {
   var el = document.getElementById('api-key-status');
   if (!el) return;
-  var key = getGeminiApiKey();
+  var key = getApiKey();
   el.textContent = key ? '🟢' : '🔴';
-  el.title = key ? 'API configurada' : 'Sin API key';
+  el.title = key ? 'API configurada (' + AI_PROVIDER + ')' : 'Sin API key';
 }
 
 let supabaseClient = null;
@@ -879,8 +906,8 @@ function initApp() {
   initExamenFisico();
   actualizarRecetaHeader();
   updateApiKeyStatus();
-  if (!getGeminiApiKey()) {
-    showToast('⚠️ Configura tu API Key de Gemini en el menú 🔑 para habilitar la IA','warning');
+  if (!getApiKey()) {
+    showToast('⚠️ Configura tu API Key en el menú 🔑 para habilitar la IA','warning');
   }
   showToast('Bienvenido, ' + window.appState.medico.nombre_completo);
 }
@@ -1304,55 +1331,78 @@ function cambiarHablante(modo) {
   }
 }
 
-// ===== GEMINI API =====
+// ===== IA API (Multi-Provider) =====
 function cleanJsonResponse(text) {
   var cleaned = text.trim();
-  if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
-  else if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
+  if (cleaned.startsWith('```json')) cleaned = cleaned.replace(/^```json/, '');
+  else if (cleaned.startsWith('```')) cleaned = cleaned.replace(/^```/, '');
   if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
   return cleaned.trim();
 }
 
-async function callGemini(systemPrompt, userMessage, maxRetries) {
+async function callIA(systemPrompt, userMessage, maxRetries) {
   if (maxRetries === undefined) maxRetries = 3;
-  if (!GEMINI_API_KEY || GEMINI_API_KEY === 'TU_GEMINI_API_KEY') {
-    showToast('⚠️ Configura tu API Key de Gemini en el menú 🔑 Configurar IA','warning');
+  if (!AI_KEY || AI_KEY === 'TU_GEMINI_API_KEY') {
+    showToast('⚠️ Configura tu API Key en el menú 🔑 Configurar IA','warning');
     return null;
   }
+  
   var attempt = 0;
   while (attempt < maxRetries) {
     try {
-      var res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + GEMINI_API_KEY, {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemPrompt }] },
-          contents: [{ parts: [{ text: userMessage }] }],
-          generationConfig: { maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 1024 } }
-        })
-      });
-      if (res.status === 429) {
-        attempt++;
-        var waitSec = Math.pow(2, attempt);
-        showToast('Límite de API alcanzado. Reintentando en ' + waitSec + 's... (' + attempt + '/' + maxRetries + ')','warning');
-        await new Promise(function(r){ setTimeout(r, waitSec * 1000); });
-        continue;
+      if (AI_PROVIDER === 'gemini') {
+        var res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + AI_KEY, {
+          method:'POST', headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ parts: [{ text: userMessage }] }],
+            generationConfig: { maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 1024 } }
+          })
+        });
+        if (res.status === 429) { await handleRateLimit(attempt, maxRetries); attempt++; continue; }
+        if (!res.ok) throw new Error('API error: ' + res.status);
+        var data = await res.json();
+        var parts = data.candidates[0].content.parts;
+        var textPart = '';
+        for (var i = parts.length - 1; i >= 0; i--) { if (parts[i].text && !parts[i].thought) { textPart = parts[i].text; break; } }
+        if (!textPart && parts.length > 0) textPart = parts[parts.length - 1].text || '';
+        return cleanJsonResponse(textPart);
+      } 
+      else if (AI_PROVIDER === 'groq' || AI_PROVIDER === 'openai') {
+        var url = AI_PROVIDER === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+        var model = AI_PROVIDER === 'groq' ? 'llama3-70b-8192' : 'gpt-4o-mini';
+        
+        var res = await fetch(url, {
+          method:'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AI_KEY },
+          body: JSON.stringify({
+            model: model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userMessage }
+            ],
+            response_format: { type: 'json_object' }
+          })
+        });
+        if (res.status === 429) { await handleRateLimit(attempt, maxRetries); attempt++; continue; }
+        if (!res.ok) throw new Error('API error: ' + res.status);
+        var data = await res.json();
+        return cleanJsonResponse(data.choices[0].message.content);
       }
-      if (!res.ok) throw new Error('API error: ' + res.status);
-      var data = await res.json();
-      var parts = data.candidates[0].content.parts;
-      var textPart = '';
-      for (var i = parts.length - 1; i >= 0; i--) { if (parts[i].text && !parts[i].thought) { textPart = parts[i].text; break; } }
-      if (!textPart && parts.length > 0) textPart = parts[parts.length - 1].text || '';
-      return cleanJsonResponse(textPart);
     } catch(e) {
-      if (attempt >= maxRetries - 1) { showToast('Error Gemini API: ' + e.message, 'error'); return null; }
+      if (attempt >= maxRetries - 1) { showToast('Error API (' + AI_PROVIDER + '): ' + e.message, 'error'); return null; }
       attempt++;
       await new Promise(function(r){ setTimeout(r, 2000); });
     }
   }
-  showToast('No se pudo conectar con Gemini después de ' + maxRetries + ' intentos','error');
+  showToast('No se pudo conectar con ' + AI_PROVIDER + ' después de ' + maxRetries + ' intentos','error');
   return null;
+}
+
+async function handleRateLimit(attempt, maxRetries) {
+  var waitSec = Math.pow(2, attempt);
+  showToast('Límite de API alcanzado. Reintentando en ' + waitSec + 's... (' + (attempt+1) + '/' + maxRetries + ')','warning');
+  await new Promise(function(r){ setTimeout(r, waitSec * 1000); });
 }
 
 async function traducirConIA(texto, seccion) {
@@ -1372,7 +1422,7 @@ REGLAS ESTRICTAS:
 6. Genera exactamente 3 versiones de redacción, de más breve a más detallada
 7. Responde SOLO en JSON: {"versiones":[{"id":1,"etiqueta":"Conciso","texto":"..."},{"id":2,"etiqueta":"Estándar","texto":"..."},{"id":3,"etiqueta":"Detallado","texto":"..."}],"terminos_detectados":["..."],"alertas":["..."]}`;
 
-  const result = await callGemini(systemPrompt, userMsg);
+  const result = await callIA(systemPrompt, userMsg);
   if (!result) {
     // Fallback demo
     mostrarVersiones({ versiones: [
