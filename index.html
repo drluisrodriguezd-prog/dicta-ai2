@@ -1308,14 +1308,24 @@ function toggleGrabacion(action) {
     document.getElementById('btn-reanudar').style.display = 'none';
     document.getElementById('btn-detener').style.display = 'none';
     document.getElementById('transcripcion-live').classList.remove('recording');
-    if (state.transcripcionActual.trim()) {
+    const textoFinal = state.transcripcionActual.trim();
+    if (!textoFinal) {
+      showToast('⚠️ No se detectó voz. Habla más fuerte o revisa tu micrófono.', 'warning');
+    } else {
       const seccion = document.getElementById('seccion-destino').value;
       if (state.modoHablante === 'paciente') {
-        traducirConIA(state.transcripcionActual.trim(), seccion);
+        if (textoFinal.length < 15 || textoFinal.split(' ').length < 4) {
+          showToast('⚠️ Grabación muy corta para IA. El texto se pasó tal cual.', 'warning');
+          const target = seccion === 'motivo_consulta' ? 'anamnesis-motivo' : 'anamnesis-enfermedad';
+          const el = document.getElementById(target);
+          el.value += (el.value ? '\n\n[Paciente]: ' : '[Paciente]: ') + textoFinal;
+        } else {
+          traducirConIA(textoFinal, seccion);
+        }
       } else {
         const target = seccion === 'motivo_consulta' ? 'anamnesis-motivo' : 'anamnesis-enfermedad';
         const el = document.getElementById(target);
-        el.value += (el.value ? '\n\n[Médico]: ' : '[Médico]: ') + state.transcripcionActual.trim();
+        el.value += (el.value ? '\n\n[Médico]: ' : '[Médico]: ') + textoFinal;
         showToast('Texto del médico agregado a ' + seccion.replace('_',' '));
       }
     }
