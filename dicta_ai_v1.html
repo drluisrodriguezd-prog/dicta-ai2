@@ -1426,9 +1426,9 @@ REGLAS ESTRICTAS:
   if (!result) {
     // Fallback demo
     mostrarVersiones({ versiones: [
-      { id:1, etiqueta:'Conciso', texto:'[Demo] Paciente refiere: ' + texto.substring(0,80) + '...' },
-      { id:2, etiqueta:'Estándar', texto:'[Demo] El/la paciente refiere ' + texto },
-      { id:3, etiqueta:'Detallado', texto:'[Demo] El/la paciente acude a consulta refiriendo ' + texto + '. Se registra el relato para valoración clínica.' }
+      { id:1, etiqueta:'Error de Conexión IA', texto:'❌ Revisa tu API Key y Proveedor. El servidor rechazó la conexión (ej. clave inválida, sin saldo o en el proveedor equivocado).\n\nTexto original: ' + texto.substring(0,80) + '...' },
+      { id:2, etiqueta:'Sugerencia 1', texto:'Asegúrate de haber seleccionado el proveedor correcto (Gemini, Groq o OpenAI) en la Configuración.' },
+      { id:3, etiqueta:'Sugerencia 2', texto:'Si usas Groq y pusiste una clave de Google, fallará. Genera una clave nueva en el link de abajo de tu proveedor.' }
     ]}, seccion);
     return;
   }
